@@ -1,0 +1,7 @@
+requests
+pandas
+google-genai
+tenacity
+tqdm
+torch
+scikit-learn
