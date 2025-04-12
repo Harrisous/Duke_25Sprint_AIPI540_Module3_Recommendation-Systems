@@ -15,7 +15,7 @@ sys.path.append(CURRENT_DIR.absolute())
 from model import HybridRecModel, user_ids, item_ids, user_llm_emb, item_llm_emb, user_id_map, item_id_map, item_llm_data
 
 
-# 初始化模型
+# Initialize model
 model = HybridRecModel(
     num_users=len(user_ids),
     num_items=len(item_ids),
@@ -42,7 +42,7 @@ def get_recommendations(user_id, user_text=None, num_recommendations=10):
     recommendations = []
     for iidx in item_id_map.keys():
         pred = predict(model, user_vec, iidx)
-        item_idx = item_id_map[iidx]  # 获取电影的位置索引
+        item_idx = item_id_map[iidx]  # Get movie position index
         recommendations.append((iidx, pred, item_llm_data.iloc[item_idx]["llm_text"]))
 
     recommendations.sort(key=lambda x: x[1], reverse=True)
@@ -67,7 +67,7 @@ def predict(model, user_vec, item_id):
 
         return (user_vec * item_vec).sum().item()
 
-# 示例
-print("\n预测（新用户，对电影1）评分：")
-for iidx, pred, text in get_recommendations(user_id=9999, user_text="age: 24, gender: M, occupation: technician. I like action movies.", num_recommendations=10):
-    print(f"电影ID: {iidx}, 评分: {pred}, 描述: {text}")
+# Example
+print("\nPredicting recommended movies for user:")
+for iidx, pred, text in get_recommendations(user_id=9999, user_text="age: 24, gender: M, occupation: technician. I like Sci-Fi movies.", num_recommendations=10):
+    print(f"Movie ID: {iidx}, Rating: {pred}, Description: {text}")

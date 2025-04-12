@@ -1,10 +1,13 @@
+import json
 import pathlib
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
+import json
 import sys
 
 CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
@@ -32,8 +35,10 @@ def load_fold_data(fold_id):
 ratings = pd.read_csv(DATA_DIR / "raw" / "ml-100k" / "u.data", sep="\t", names=["user_id", "item_id", "rating", "timestamp"])
 user_ids = ratings["user_id"].unique()
 item_ids = ratings["item_id"].unique()
-user_id_map = {uid: idx for idx, uid in enumerate(user_ids)}
-item_id_map = {iid: idx for idx, iid in enumerate(item_ids)}
+# user_id_map = {uid: idx for idx, uid in enumerate(user_ids)}
+# item_id_map = {iid: idx for idx, iid in enumerate(item_ids)}
+user_id_map = json.load(open(DATA_DIR / "processed" / "user_id_map.json"))
+item_id_map = json.load(open(DATA_DIR / "processed" / "item_id_map.json"))
 
 # Load cached LLM embeddings
 user_llm_data = pd.read_json(DATA_DIR / "processed" / "user_embeddings.json", orient="records")
@@ -79,7 +84,17 @@ class HybridRecModel(nn.Module):
         user_vec = self.user_mlp(user_vec)
         item_vec = self.item_mlp(item_vec)
 
-        return (user_vec * item_vec).sum(dim=1)
+        # return (user_vec * item_vec).sum(dim=1)
+
+        # 归一化
+        user_vec = F.normalize(user_vec, p=2, dim=1)
+        item_vec = F.normalize(item_vec, p=2, dim=1)
+        
+        # 计算相似度并映射到1-5范围
+        similarity = F.cosine_similarity(user_vec, item_vec)
+        rating = 1 + 2 * (similarity + 1)  # 将[-1,1]映射到[1,5]
+        
+        return rating
 
     def get_fallback_user(self):
         return self.user_llm_emb.mean(dim=0, keepdim=True)
@@ -129,10 +144,10 @@ def train_and_evaluate_fold(fold_id, model, epochs=10, batch_size=1024, lr=0.005
     
     # Load data for this fold
     train_df, test_df = load_fold_data(fold_id)
-    train_df["user_idx"] = train_df["user_id"].map(user_id_map)
-    train_df["item_idx"] = train_df["item_id"].map(item_id_map)
-    test_df["user_idx"] = test_df["user_id"].map(user_id_map)
-    test_df["item_idx"] = test_df["item_id"].map(item_id_map)
+    train_df["user_idx"] = train_df["user_id"].map(lambda x: user_id_map[str(x)])
+    train_df["item_idx"] = train_df["item_id"].map(lambda x: item_id_map[str(x)])
+    test_df["user_idx"] = test_df["user_id"].map(lambda x: user_id_map[str(x)])
+    test_df["item_idx"] = test_df["item_id"].map(lambda x: item_id_map[str(x)])
     
     # Prepare training data
     train_users = torch.LongTensor(train_df["user_idx"].values)
@@ -208,6 +223,33 @@ if __name__ == "__main__":
     # Perform 5-fold cross validation
     print("\nStarting 5-fold cross validation evaluation...")
     final_metrics = run_cross_validation(model)
+
+    # train model on whole dataset
+    train_df = pd.read_csv(DATA_DIR / "raw" / "ml-100k" / "u.data", sep="\t", names=["user_id", "item_id", "rating", "timestamp"])
+    train_df["user_idx"] = train_df["user_id"].map(lambda x: user_id_map[str(x)])
+    train_df["item_idx"] = train_df["item_id"].map(lambda x: item_id_map[str(x)])
+    train_users = torch.LongTensor(train_df["user_idx"].values)
+    train_items = torch.LongTensor(train_df["item_idx"].values)
+    train_ratings = torch.FloatTensor(train_df["rating"].values)
+
+    model.train()
+    optimizer = optim.Adam(model.parameters(), lr=0.005)
+    criterion = nn.MSELoss()
+    batch_size = 1024
+    for epoch in range(30):
+        total_loss = 0
+        for i in range(0, len(train_users), batch_size):
+            batch_users = train_users[i:i+batch_size]
+            batch_items = train_items[i:i+batch_size]
+            batch_ratings = train_ratings[i:i+batch_size]
+
+            optimizer.zero_grad()
+            preds = model(batch_users, batch_items)
+            loss = criterion(preds, batch_ratings)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        print(f"Epoch {epoch+1}, Loss: {total_loss:.4f}")
 
     # save model
     MODEL_PATH = CURRENT_DIR / "models"
