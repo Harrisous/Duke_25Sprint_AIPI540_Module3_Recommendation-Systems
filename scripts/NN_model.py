@@ -8,7 +8,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 CURRENT_DIR = pathlib.Path().resolve() # Assuming running from the same level as the previous scripts
 # Adjust DATA_DIR if your script structure is different
 #C:\Users\harsh\OneDrive\Desktop\DL Project\Movie Project\Duke_25Sprint_AIPI540_Module3_Recommendation-Systems\data
-DATA_DIR = CURRENT_DIR / "Duke_25Sprint_AIPI540_Module3_Recommendation-Systems" / "data"
+DATA_DIR = CURRENT_DIR / "data"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 RAW_DATA_DIR = DATA_DIR / "raw"
 MOVIELENS_DIR = RAW_DATA_DIR / "ml-100k"
@@ -64,18 +64,12 @@ class EmbeddingRecommendation:
         """
         Loads pre-computed user embeddings and rating data.
         """
-        print("Loading data...")
         try:
-            # Load user embeddings (JSON stores list of dicts)
             user_embeddings_list = pd.read_json(PROCESSED_DATA_DIR / "user_embeddings.json", orient='records').to_dict('records')
-            # Convert to a dictionary {user_id: embedding_vector} for easy lookup
             self.user_embeddings_dict = {user['user_id']: np.array(user['embedding']) for user in user_embeddings_list}
             self.user_ids = list(self.user_embeddings_dict.keys())
-            # Create a matrix of embeddings for faster similarity calculation
-            # Ensure the order matches self.user_ids
             self.user_embedding_matrix = np.array([self.user_embeddings_dict[uid] for uid in self.user_ids])
 
-            # Load original ratings data to know what users rated
             rating_cols = ['user_id', 'item_id', 'rating', 'timestamp']
             self.ratings_df = pd.read_csv(MOVIELENS_DIR / "u.data", sep='\t', names=rating_cols, engine='python')
 
@@ -84,7 +78,7 @@ class EmbeddingRecommendation:
 
         except FileNotFoundError as e:
             print(f"Error loading data: {e}")
-            print("Make sure 'get_text_profiles.py' and 'get_profile_embeddings.py' ran successfully.")
+            print("Making sure 'get_text_profiles.py' and 'get_profile_embeddings.py' ran successfully.")
             raise
 
     def _find_most_similar_user(self, target_user_id):
@@ -95,15 +89,9 @@ class EmbeddingRecommendation:
             raise ValueError(f"User ID {target_user_id} not found in embeddings.")
 
         target_embedding = self.user_embeddings_dict[target_user_id].reshape(1, -1)
-
-        # Calculate cosine similarity between target user and all users
         similarities = cosine_similarity(target_embedding, self.user_embedding_matrix)[0] # Get the 1D array
-
-        # Find the index of the target user to exclude self-similarity
         target_user_index = self.user_ids.index(target_user_id)
-        similarities[target_user_index] = -1 # Set self-similarity to a low value
-
-        # Find the index of the most similar user (excluding self)
+        similarities[target_user_index] = -1 # set self-similarity to a low value
         most_similar_user_index = np.argmax(similarities)
         most_similar_user_id = self.user_ids[most_similar_user_index]
 
@@ -116,8 +104,14 @@ class EmbeddingRecommendation:
         :param top_k: Number of items to recommend.
         :param rating_threshold: Minimum rating for an item to be considered 'liked' by the similar user.
         :return: List of recommended item IDs.
+
+        1. Find the most similar user based on text embeddings
+        2. Get items rated highly by the most similar user
+        3. Get items already rated by the target user
+        4. Find items liked by similar user but not rated by target user
+        5. Sort recommendations by the similar user's rating (descending) and return top_k
+        Get the ratings the similar user gave ONLY to the potential recommendations
         """
-        # 1. Find the most similar user based on text embeddings
         try:
             most_similar_user_id = self._find_most_similar_user(target_user_id)
             print(f"Most similar user to {target_user_id} is {most_similar_user_id}")
@@ -125,7 +119,6 @@ class EmbeddingRecommendation:
             print(e)
             return []
 
-        # 2. Get items rated highly by the most similar user
         similar_user_ratings = self.ratings_df[
             (self.ratings_df['user_id'] == most_similar_user_id) &
             (self.ratings_df['rating'] >= rating_threshold)
@@ -136,18 +129,13 @@ class EmbeddingRecommendation:
             print(f"Similar user {most_similar_user_id} has no liked items (rating >= {rating_threshold}).")
             return []
 
-        # 3. Get items already rated by the target user
         target_user_rated_items = set(self.ratings_df[self.ratings_df['user_id'] == target_user_id]['item_id'])
-
-        # 4. Find items liked by similar user but not rated by target user
         items_to_recommend = list(similar_user_liked_items - target_user_rated_items)
 
         if not items_to_recommend:
             print(f"Target user {target_user_id} has already rated all items liked by similar user {most_similar_user_id}.")
             return []
-
-        # 5. Sort recommendations by the similar user's rating (descending) and return top_k
-        # Get the ratings the similar user gave ONLY to the potential recommendations
+        
         recommendation_ratings = similar_user_ratings[similar_user_ratings['item_id'].isin(items_to_recommend)]
         recommendation_ratings = recommendation_ratings.sort_values(by='rating', ascending=False)
 
@@ -158,13 +146,13 @@ if __name__ == "__main__":
     # example user-movie interaction matrix
     # rows represent users, columns represent movies, and values represent ratings (0 = not rated)
     user_item_matrix = np.array([
-    [5, 4, 1, 0],  # Alice
-    [5, 2, 0, 3],  # Bob
-    [5, 0, 0, 4],  # Carol
-    [5, 5, 0, 4],  # David
-    [5, 4, 0, 3],  # Eve
-    [0, 3, 4, 5],  # Frank (new user)
-    [0, 0, 5, 4],  # Grace (new user)
+    [5, 4, 1, 0],  # User 1: Alice
+    [5, 2, 0, 3],  # User 2: Bob
+    [5, 0, 0, 4],  # User 3: Carol
+    [5, 5, 0, 4],  # User 4: David
+    [5, 4, 0, 3],  # User 5: Eve
+    [0, 3, 4, 5],  # User 6: Frank (new user)
+    [0, 0, 5, 4],  # User 7: Grace (new user)
     ])
 
  #--------------------------------------------------Naive Method--------------------------------------------------------------------------
@@ -183,19 +171,17 @@ if __name__ == "__main__":
         Erecommender = EmbeddingRecommendation()
 
         # --- Load Movie Titles ---
-        # Define path to u.item using the MOVIELENS_DIR variable
         movies_file_path = MOVIELENS_DIR / "u.item"
         try:
             movie_cols = ['item_id', 'title']
-            # Load with index_col='item_id' for easy lookup
             movies_df = pd.read_csv(
                 movies_file_path,
                 sep='|',
                 encoding='latin-1',
                 header=None,
-                usecols=[0, 1], # Only load item_id and title
+                usecols=[0, 1],
                 names=movie_cols,
-                index_col='item_id' # Use item_id as the DataFrame index
+                index_col='item_id'
             )
             print(f"\nLoaded movie titles from {movies_file_path}")
             titles_loaded = True
@@ -218,7 +204,6 @@ if __name__ == "__main__":
             print(f"Recommended item IDs: {recommendations_ids}")
             if titles_loaded:
                 try:
-                    # Look up titles using .loc with the list of IDs
                     recommended_titles = movies_df.loc[recommendations_ids]['title'].tolist()
                     print("\nRecommended movie titles:")
                     for i, title in enumerate(recommended_titles):
@@ -240,7 +225,6 @@ if __name__ == "__main__":
             print(f"Recommended item IDs: {recommendations_ids}")
             if titles_loaded:
                 try:
-                    # Look up titles using .loc
                     recommended_titles = movies_df.loc[recommendations_ids]['title'].tolist()
                     print("\nRecommended movie titles:")
                     for i, title in enumerate(recommended_titles):
