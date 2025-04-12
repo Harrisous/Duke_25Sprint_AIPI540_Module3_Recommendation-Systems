@@ -57,20 +57,16 @@ def make_user_text(row):
 users["llm_text"] = users.apply(make_user_text, axis=1)
 
 # Save user and movie texts
-user_texts = users[["user_id", "llm_text"]].copy()  # 创建副本而不是视图
-movie_texts = movies[["item_id", "llm_text"]].copy()  # 创建副本而不是视图
+user_texts = users[["user_id", "llm_text"]].copy()  # Create a copy instead of a view
+movie_texts = movies[["item_id", "llm_text"]].copy()  # Create a copy instead of a view
 
-# 使用 loc 进行赋值
+# Using loc for assignment
 user_texts.loc[:, "user_idx"] = user_texts["user_id"].map(lambda x: user_id_map[str(x)])
 movie_texts.loc[:, "item_idx"] = movie_texts["item_id"].map(lambda x: item_id_map[str(x)])
 
-# user_texts 按 user_idx 排序，升序
+# Sort user_texts by user_idx in ascending order
 user_texts = user_texts.sort_values(by="user_idx", ascending=True)
 movie_texts = movie_texts.sort_values(by="item_idx", ascending=True)
-
-# 删除 user_idx 和 item_id
-user_texts = user_texts.drop(columns=["user_id"])
-movie_texts = movie_texts.drop(columns=["item_id"])
 
 user_texts.to_csv(DATA_DIR / "processed" / "user_texts_for_llm.csv", index=False)
 movie_texts.to_csv(DATA_DIR / "processed" / "movie_texts_for_llm.csv", index=False)
