@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import uvicorn
@@ -19,6 +20,15 @@ app = FastAPI(
     description="API for movie recommendations using a hybrid recommendation system",
     version="1.0.0",
     docs_url="/",
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
 )
 
 client = genai.Client(api_key="AIzaSyAonKpVdGZlvwmfRiBd9TkakXpZU95ht34")
