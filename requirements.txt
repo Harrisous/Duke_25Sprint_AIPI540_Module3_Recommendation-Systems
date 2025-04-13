@@ -5,3 +5,5 @@ tenacity
 tqdm
 torch
 scikit-learn
+numpy
+streamlit
