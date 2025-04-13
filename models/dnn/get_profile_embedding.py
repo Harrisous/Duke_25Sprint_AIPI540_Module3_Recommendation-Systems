@@ -7,6 +7,10 @@ import time
 from typing import List
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from tqdm import tqdm
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
 DATA_DIR = CURRENT_DIR / ".." / ".." / "data"
@@ -18,7 +22,7 @@ from google import genai
 from google.genai import types
 from google.genai.errors import ClientError
 
-client = genai.Client(api_key="AIzaSyAonKpVdGZlvwmfRiBd9TkakXpZU95ht34")
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
 @retry(
     stop=stop_after_attempt(10),  # Maximum 10 retries

@@ -9,6 +9,11 @@ from google.genai.errors import ClientError
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import sys
 import pathlib
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
 sys.path.append(CURRENT_DIR.absolute())
@@ -31,7 +36,7 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-client = genai.Client(api_key="AIzaSyAonKpVdGZlvwmfRiBd9TkakXpZU95ht34")
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
 @retry(
     stop=stop_after_attempt(10),  # Maximum 10 retries
