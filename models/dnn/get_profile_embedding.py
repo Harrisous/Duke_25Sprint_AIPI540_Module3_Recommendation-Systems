@@ -22,7 +22,7 @@ client = genai.Client(api_key="AIzaSyAonKpVdGZlvwmfRiBd9TkakXpZU95ht34")
 
 @retry(
     stop=stop_after_attempt(10),  # Maximum 10 retries
-    wait=wait_exponential(multiplier=2, min=2, max=10),  # Exponential backoff: 2s, 4s, 8s
+    wait=wait_exponential(multiplier=2, min=2, max=60),  # Exponential backoff: 2s, 4s, 8s
     retry=retry_if_exception_type(ClientError),  # Only retry on ClientError
     before_sleep=lambda retry_state: print(f"Rate limit hit, waiting {retry_state.next_action.sleep} seconds...")
 )
