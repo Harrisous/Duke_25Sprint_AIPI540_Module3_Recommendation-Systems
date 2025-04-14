@@ -3,6 +3,9 @@ import pandas as pd
 import os
 import pathlib
 from sklearn.metrics.pairwise import cosine_similarity
+from openai import OpenAI, RateLimitError
+from typing import List
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # --- Configuration ---
 CURRENT_DIR = pathlib.Path().resolve() # Assuming running from the same level as the previous scripts
@@ -13,6 +16,45 @@ PROCESSED_DATA_DIR = DATA_DIR / "processed"
 RAW_DATA_DIR = DATA_DIR / "raw"
 MOVIELENS_DIR = RAW_DATA_DIR / "ml-100k"
 movies_file_path = MOVIELENS_DIR / "u.item"
+
+
+
+try:
+    client = OpenAI()
+    print("OpenAI client initialized.")
+except Exception as e:
+    print(f"Error initializing OpenAI client: {e}")
+    print("Ensure OPENAI_API_KEY environment variable is set.")
+    client = None
+
+OPENAI_EMBEDDING_MODEL = "text-embedding-3-small" # or "text-embedding-3-large"
+
+@retry(
+    stop=stop_after_attempt(8), # Adjust retry attempts if needed
+    wait=wait_exponential(multiplier=2, min=2, max=30), # Exponential backoff
+    retry=retry_if_exception_type(RateLimitError), # Retry specifically on OpenAI RateLimitError
+    before_sleep=lambda retry_state: print(f"OpenAI rate limit hit, waiting {retry_state.next_action.sleep:.2f} seconds...")
+)
+def get_openai_embedding(text: str) -> np.ndarray | None:
+    """
+    Generates an embedding for the given text using the OpenAI API.
+    Returns a numpy array or None if an error occurs.
+    """
+    if not client:
+        print("OpenAI client not available.")
+        return None
+    try:
+        text = text.replace("\n", " ") # OpenAI API might have issues with newlines
+        response = client.embeddings.create(input=[text], model=OPENAI_EMBEDDING_MODEL)
+        embedding = response.data[0].embedding
+        return np.array(embedding)
+    except RateLimitError as e:
+        print(f"Caught RateLimitError, tenacity will handle retry: {e}")
+        raise # Reraise the exception so tenacity can catch and retry
+    except Exception as e:
+        print(f"An error occurred during OpenAI embedding generation: {e}")
+        return None
+
 
 class NaiveRecommendation:
     def __init__(self):
@@ -59,87 +101,119 @@ class NaiveRecommendation:
         norm_matrix = np.linalg.norm(matrix, axis=1) # get the norm, axis=1 -> row
         return dot_product / (norm_matrix * norm_vector + 1e-10)  # Add small value to avoid division by zero
 
-class EmbeddingRecommendation:
+
+
+class EmbeddingRecommender:
     def __init__(self):
         """
-        Loads pre-computed user embeddings and rating data.
+        Loads pre-computed movie embeddings and movie metadata.
         """
+        print("Loading pre-computed movie data...")
         try:
-            user_embeddings_list = pd.read_json(PROCESSED_DATA_DIR / "user_embeddings.json", orient='records').to_dict('records')
-            self.user_embeddings_dict = {user['user_id']: np.array(user['embedding']) for user in user_embeddings_list}
-            self.user_ids = list(self.user_embeddings_dict.keys())
-            self.user_embedding_matrix = np.array([self.user_embeddings_dict[uid] for uid in self.user_ids])
+            # Load MOVIE embeddings (assuming these were generated previously)
+            # Needs user_embeddings.json/movie_embeddings.json from get_profile_embeddings.py
+            movie_embeddings_list = pd.read_json(PROCESSED_DATA_DIR / "movie_embeddings_openai.json", orient='records').to_dict('records')
+            # Convert to a dictionary {item_id: embedding_vector}
+            self.movie_embeddings_dict = {movie['item_id']: np.array(movie['embedding']) for movie in movie_embeddings_list}
+            self.movie_ids = list(self.movie_embeddings_dict.keys())
+            # Create a matrix of movie embeddings for faster similarity calculation
+            # Ensure the order matches self.movie_ids
+            self.movie_embedding_matrix = np.array([self.movie_embeddings_dict[mid] for mid in self.movie_ids])
 
-            rating_cols = ['user_id', 'item_id', 'rating', 'timestamp']
-            self.ratings_df = pd.read_csv(MOVIELENS_DIR / "u.data", sep='\t', names=rating_cols, engine='python')
-
-            print(f"Loaded embeddings for {len(self.user_ids)} users.")
-            print(f"Loaded {len(self.ratings_df)} ratings.")
+            # Load movie titles for display
+            movies_file_path = MOVIELENS_DIR / "u.item"
+            movie_cols = ['item_id', 'title']
+            self.movies_df = pd.read_csv(
+                movies_file_path, sep='|', encoding='latin-1', header=None,
+                usecols=[0, 1], names=movie_cols, index_col='item_id'
+            )
+            self.titles_loaded = True
+            print(f"Loaded embeddings for {len(self.movie_ids)} movies.")
+            print(f"Loaded titles for {len(self.movies_df)} movies.")
 
         except FileNotFoundError as e:
             print(f"Error loading data: {e}")
-            print("Making sure 'get_text_profiles.py' and 'get_profile_embeddings.py' ran successfully.")
+            print("Make sure 'movie_embeddings_openai.json' and 'u.item' exist.")
+            print("Movie embeddings need to be generated first (can use OpenAI or Gemini).")
+            self.titles_loaded = False
             raise
+        except Exception as e:
+             print(f"An unexpected error occurred during loading: {e}")
+             self.titles_loaded = False
+             raise
 
-    def _find_most_similar_user(self, target_user_id):
+
+    def _generate_user_profile_text(self, age: int, gender: str, occupation: str, liked_genres: List[str] = None, liked_movies: List[str] = None, disliked_movies: List[str] = None) -> str:
         """
-        Finds the user with the most similar embedding to the target user.
+        Creates a descriptive text string from user input.
         """
-        if target_user_id not in self.user_embeddings_dict:
-            raise ValueError(f"User ID {target_user_id} not found in embeddings.")
+        profile = f"User profile - Age: {age}, Gender: {gender}, Occupation: {occupation}."
+        if liked_genres:
+            profile += f" Primarily enjoys genres like: {', '.join(liked_genres)}."
+        if liked_movies:
+            profile += f" Some favorite movies include: {', '.join(liked_movies)}."
+        if disliked_movies:
+             profile += f" Dislikes movies like: {', '.join(disliked_movies)}."
+        return profile
 
-        target_embedding = self.user_embeddings_dict[target_user_id].reshape(1, -1)
-        similarities = cosine_similarity(target_embedding, self.user_embedding_matrix)[0] # Get the 1D array
-        target_user_index = self.user_ids.index(target_user_id)
-        similarities[target_user_index] = -1 # set self-similarity to a low value
-        most_similar_user_index = np.argmax(similarities)
-        most_similar_user_id = self.user_ids[most_similar_user_index]
-
-        return most_similar_user_id
-
-    def recommend(self, target_user_id, top_k=5, rating_threshold=4):
+    def recommend_movies_for_user(self, age: int, gender: str, occupation: str, liked_genres: List[str] = None, liked_movies: List[str] = None, disliked_movies: List[str] = None, top_k=10):
         """
-        Recommend items to a user based on the most similar user found via embeddings.
-        :param target_user_id: ID of the user to recommend items for.
-        :param top_k: Number of items to recommend.
-        :param rating_threshold: Minimum rating for an item to be considered 'liked' by the similar user.
-        :return: List of recommended item IDs.
-
-        1. Find the most similar user based on text embeddings
-        2. Get items rated highly by the most similar user
-        3. Get items already rated by the target user
-        4. Find items liked by similar user but not rated by target user
-        5. Sort recommendations by the similar user's rating (descending) and return top_k
-        Get the ratings the similar user gave ONLY to the potential recommendations
+        Generates movie recommendations based on user input profile.
+        :param age: User's age
+        :param gender: User's gender ('M', 'F', 'O', etc.)
+        :param occupation: User's occupation
+        :param liked_genres: Optional list of preferred genres
+        :param liked_movies: Optional list of liked movie titles (for context)
+        :param disliked_movies: Optional list of disliked movie titles (for context/filtering)
+        :param top_k: Number of recommendations to return
+        :return: List of tuples (movie_title, similarity_score, item_id) or empty list
         """
-        try:
-            most_similar_user_id = self._find_most_similar_user(target_user_id)
-            print(f"Most similar user to {target_user_id} is {most_similar_user_id}")
-        except ValueError as e:
-            print(e)
+        print("\nGenerating profile text...")
+        user_profile_text = self._generate_user_profile_text(age, gender, occupation, liked_genres, liked_movies, disliked_movies)
+        print(f"Generated Profile: {user_profile_text}")
+
+        print("Generating embedding for user profile using OpenAI...")
+        user_embedding = get_openai_embedding(user_profile_text) # Uses the OpenAI function
+
+        if user_embedding is None:
+            print("Failed to generate user embedding. Cannot provide recommendations.")
             return []
 
-        similar_user_ratings = self.ratings_df[
-            (self.ratings_df['user_id'] == most_similar_user_id) &
-            (self.ratings_df['rating'] >= rating_threshold)
-        ]
-        similar_user_liked_items = set(similar_user_ratings['item_id'])
+        # Reshape for cosine_similarity
+        user_embedding = user_embedding.reshape(1, -1)
 
-        if not similar_user_liked_items:
-            print(f"Similar user {most_similar_user_id} has no liked items (rating >= {rating_threshold}).")
-            return []
+        print("Calculating similarity between user profile and all movies...")
+        # Calculate cosine similarity between the new user profile embedding and all movie embeddings
+        similarities = cosine_similarity(user_embedding, self.movie_embedding_matrix)[0] # Get the 1D array
 
-        target_user_rated_items = set(self.ratings_df[self.ratings_df['user_id'] == target_user_id]['item_id'])
-        items_to_recommend = list(similar_user_liked_items - target_user_rated_items)
+        # Get the indices of the top_k most similar movies
+        # Argsort sorts in ascending order, so we take the last k elements [::-1] reverses to descending
+        top_k_indices = np.argsort(similarities)[-top_k:][::-1]
 
-        if not items_to_recommend:
-            print(f"Target user {target_user_id} has already rated all items liked by similar user {most_similar_user_id}.")
-            return []
-        
-        recommendation_ratings = similar_user_ratings[similar_user_ratings['item_id'].isin(items_to_recommend)]
-        recommendation_ratings = recommendation_ratings.sort_values(by='rating', ascending=False)
+        # Get the corresponding movie IDs and scores
+        recommended_movie_ids = [self.movie_ids[i] for i in top_k_indices]
+        recommendation_scores = [similarities[i] for i in top_k_indices]
 
-        return recommendation_ratings['item_id'].tolist()[:top_k]
+        recommendations = []
+        if self.titles_loaded:
+            for item_id, score in zip(recommended_movie_ids, recommendation_scores):
+                try:
+                    title = self.movies_df.loc[item_id]['title']
+                    # Basic filtering: skip if movie title was explicitly disliked
+                    if disliked_movies and title in disliked_movies:
+                        print(f"Skipping disliked movie: {title}")
+                        continue
+                    recommendations.append((title, score, item_id))
+                except KeyError:
+                    print(f"Warning: Could not find title for item ID {item_id}")
+                except Exception as e:
+                    print(f"Error retrieving title for {item_id}: {e}")
+        else:
+            # Return IDs and scores if titles aren't loaded
+            recommendations = list(zip(recommended_movie_ids, recommendation_scores))
+
+        # Adjust if filtering reduced the count below top_k
+        return recommendations[:top_k]
 
 
 if __name__ == "__main__":
@@ -166,75 +240,38 @@ if __name__ == "__main__":
         print(f"Recommended items for user {user_index}: {recommendations}")
 
 #------------------------------------------------Included Embeddings----------------------------------------------------------------------------
-    print("Recommendations using embeddings:")
+
     try:
-        Erecommender = EmbeddingRecommendation()
+        if client is None:
+             raise SystemExit("OpenAI client failed to initialize. Check API key/environment variable.")
 
-        # --- Load Movie Titles ---
-        movies_file_path = MOVIELENS_DIR / "u.item"
-        try:
-            movie_cols = ['item_id', 'title']
-            movies_df = pd.read_csv(
-                movies_file_path,
-                sep='|',
-                encoding='latin-1',
-                header=None,
-                usecols=[0, 1],
-                names=movie_cols,
-                index_col='item_id'
-            )
-            print(f"\nLoaded movie titles from {movies_file_path}")
-            titles_loaded = True
-        except FileNotFoundError:
-            print(f"\nError: Movie titles file not found at {movies_file_path}")
-            print("Cannot display movie titles.")
-            titles_loaded = False
-        except Exception as e:
-            print(f"\nError loading movie titles: {e}")
-            titles_loaded = False
-        # --- End Load Movie Titles ---
+        recommender = EmbeddingRecommender()
 
+        user_input = {
+            "age": 30,
+            "gender": "M",
+            "occupation": "engineer",
+            "liked_genres": ["Sci-Fi", "Action", "Thriller"],
+            "liked_movies": ["The Matrix", "Blade Runner"],
+            "disliked_movies": ["Titanic"] 
+        }
 
-        # --- Get Recommendations for User 1 ---
-        user_id_to_recommend = 1
-        print(f"\n--- Recommendations for User {user_id_to_recommend} ---")
-        recommendations_ids = Erecommender.recommend(user_id_to_recommend, top_k=10)
+        #print(f"\n--- Generating recommendations for profile: ---")
+        #print(user_input)
 
-        if recommendations_ids:
-            print(f"Recommended item IDs: {recommendations_ids}")
-            if titles_loaded:
-                try:
-                    recommended_titles = movies_df.loc[recommendations_ids]['title'].tolist()
-                    print("\nRecommended movie titles:")
-                    for i, title in enumerate(recommended_titles):
-                        print(f"- {title} (ID: {recommendations_ids[i]})")
-                except KeyError as e:
-                    print(f"\nError: Could not find title for one or more item IDs: {e}. Some IDs might be missing from u.item.")
-                except Exception as e:
-                     print(f"\nAn error occurred during title lookup: {e}")
-        else:
-            print(f"No recommendations found for user {user_id_to_recommend}.")
+        recommendations = recommender.recommend_movies_for_user(**user_input, top_k=10)
+
+        if recommendations:
+            print("\n--- Top Recommendations ---")
+            for i, (title_or_id, score, *rest) in enumerate(recommendations):
+                if recommender.titles_loaded: 
+                    item_id = rest[0] if rest else 'N/A'
+                    print(f"{i+1}. {title_or_id} (ID: {item_id}) - Similarity: {score:.4f}")
+                else:
+                    print(f"{i+1}. Item ID: {title_or_id} - Similarity: {score:.4f}")
 
 
-        # --- Get Recommendations for User 50 ---
-        user_id_to_recommend = 50
-        print(f"\n--- Recommendations for User {user_id_to_recommend} ---")
-        recommendations_ids = Erecommender.recommend(user_id_to_recommend, top_k=10)
-
-        if recommendations_ids:
-            print(f"Recommended item IDs: {recommendations_ids}")
-            if titles_loaded:
-                try:
-                    recommended_titles = movies_df.loc[recommendations_ids]['title'].tolist()
-                    print("\nRecommended movie titles:")
-                    for i, title in enumerate(recommended_titles):
-                        print(f"- {title} (ID: {recommendations_ids[i]})")
-                except KeyError as e:
-                    print(f"\nError: Could not find title for one or more item IDs: {e}.")
-                except Exception as e:
-                     print(f"\nAn error occurred during title lookup: {e}")
-        else:
-            print(f"No recommendations found for user {user_id_to_recommend}.")
-
+    except FileNotFoundError:
+        print("\nExecution failed due to missing files. Please check paths and ensure necessary files exist.")
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"\nAn unexpected error occurred in the main block: {e}")
