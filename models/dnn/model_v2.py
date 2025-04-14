@@ -87,13 +87,13 @@ class HybridRecModel(nn.Module):
         # return (user_vec * item_vec).sum(dim=1)
 
         # 归一化
-        user_vec = F.normalize(user_vec, p=2, dim=1)
-        item_vec = F.normalize(item_vec, p=2, dim=1)
+        # user_vec = F.normalize(user_vec, p=2, dim=1)
+        # item_vec = F.normalize(item_vec, p=2, dim=1)
         
         # 计算相似度并映射到1-5范围
         similarity = F.cosine_similarity(user_vec, item_vec)
-        rating = 1 + 2 * (similarity + 1)  # 将[-1,1]映射到[1,5]
-        
+        # rating = 1 + 2 * (similarity + 1)  # 将[-1,1]映射到[1,5]
+        rating = 1 + 4 * (similarity ** 2)  # non-linear mapping, to help with cold start
         return rating
 
     def get_fallback_user(self):
@@ -158,10 +158,12 @@ def train_and_evaluate_fold(fold_id, model, epochs=10, batch_size=1024, lr=0.005
     test_users = torch.LongTensor(test_df["user_idx"].values)
     test_items = torch.LongTensor(test_df["item_idx"].values)
     test_ratings = torch.FloatTensor(test_df["rating"].values)
+
+    weight_decay=0.01
     
     # Reinitialize model
     model.apply(lambda m: m.reset_parameters() if hasattr(m, 'reset_parameters') else None)
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     criterion = nn.MSELoss()
     
     # Training process
@@ -175,7 +177,22 @@ def train_and_evaluate_fold(fold_id, model, epochs=10, batch_size=1024, lr=0.005
             
             optimizer.zero_grad()
             preds = model(batch_users, batch_items)
-            loss = criterion(preds, batch_ratings)
+
+            # 基本MSE损失
+            mse_loss = criterion(preds, batch_ratings)
+            
+            # 对高评分预测添加额外惩罚（针对预测评分高于4的情况）
+            high_rating_mask = (preds > 4.0)
+            high_rating_penalty = 0.0
+            if high_rating_mask.any():
+                # 对高评分预测额外惩罚
+                high_preds = preds[high_rating_mask]
+                high_targets = batch_ratings[high_rating_mask]
+                high_rating_penalty = ((high_preds - high_targets) ** 2).mean() * 0.5  # 额外权重
+            
+            # 总损失
+            loss = mse_loss + high_rating_penalty
+            
             loss.backward()
             optimizer.step()
             total_loss += loss.item()

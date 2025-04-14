@@ -64,7 +64,8 @@ def predict(model, user_vec, item_id):
         
         # 计算相似度并映射到1-5范围
         similarity = F.cosine_similarity(user_vec, item_vec)
-        rating = 1 + 2 * (similarity + 1)  # 将[-1,1]映射到[1,5]
+        # rating = 1 + 2 * (similarity + 1)  # 将[-1,1]映射到[1,5]
+        rating = 1 + 4 * (similarity ** 2)  # non-linear mapping, to help with cold start
 
         return rating.item()
 
