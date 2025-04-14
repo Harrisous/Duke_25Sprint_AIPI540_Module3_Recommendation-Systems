@@ -8,9 +8,7 @@ from typing import List
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # --- Configuration ---
-CURRENT_DIR = pathlib.Path().resolve() # Assuming running from the same level as the previous scripts
-# Adjust DATA_DIR if your script structure is different
-#C:\Users\harsh\OneDrive\Desktop\DL Project\Movie Project\Duke_25Sprint_AIPI540_Module3_Recommendation-Systems\data
+CURRENT_DIR = pathlib.Path().resolve()
 DATA_DIR = CURRENT_DIR / "data"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 RAW_DATA_DIR = DATA_DIR / "raw"
@@ -21,18 +19,17 @@ movies_file_path = MOVIELENS_DIR / "u.item"
 
 try:
     client = OpenAI()
-    print("OpenAI client initialized.")
+    #print("client initialized.")
 except Exception as e:
-    print(f"Error initializing OpenAI client: {e}")
-    print("Ensure OPENAI_API_KEY environment variable is set.")
+    #print(f"Error initializing client: {e}")
     client = None
 
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small" # or "text-embedding-3-large"
 
 @retry(
-    stop=stop_after_attempt(8), # Adjust retry attempts if needed
-    wait=wait_exponential(multiplier=2, min=2, max=30), # Exponential backoff
-    retry=retry_if_exception_type(RateLimitError), # Retry specifically on OpenAI RateLimitError
+    stop=stop_after_attempt(8), #adjust if needed
+    wait=wait_exponential(multiplier=2, min=2, max=30),
+    retry=retry_if_exception_type(RateLimitError), 
     before_sleep=lambda retry_state: print(f"OpenAI rate limit hit, waiting {retry_state.next_action.sleep:.2f} seconds...")
 )
 def get_openai_embedding(text: str) -> np.ndarray | None:
@@ -41,7 +38,7 @@ def get_openai_embedding(text: str) -> np.ndarray | None:
     Returns a numpy array or None if an error occurs.
     """
     if not client:
-        print("OpenAI client not available.")
+        #print("OpenAI client not available.")
         return None
     try:
         text = text.replace("\n", " ") # OpenAI API might have issues with newlines
@@ -50,7 +47,7 @@ def get_openai_embedding(text: str) -> np.ndarray | None:
         return np.array(embedding)
     except RateLimitError as e:
         print(f"Caught RateLimitError, tenacity will handle retry: {e}")
-        raise # Reraise the exception so tenacity can catch and retry
+        raise 
     except Exception as e:
         print(f"An error occurred during OpenAI embedding generation: {e}")
         return None
@@ -108,19 +105,13 @@ class EmbeddingRecommender:
         """
         Loads pre-computed movie embeddings and movie metadata.
         """
-        print("Loading pre-computed movie data...")
+        #print("Loading pre-computed movie data...")
         try:
-            # Load MOVIE embeddings (assuming these were generated previously)
-            # Needs user_embeddings.json/movie_embeddings.json from get_profile_embeddings.py
             movie_embeddings_list = pd.read_json(PROCESSED_DATA_DIR / "movie_embeddings_openai.json", orient='records').to_dict('records')
-            # Convert to a dictionary {item_id: embedding_vector}
             self.movie_embeddings_dict = {movie['item_id']: np.array(movie['embedding']) for movie in movie_embeddings_list}
             self.movie_ids = list(self.movie_embeddings_dict.keys())
-            # Create a matrix of movie embeddings for faster similarity calculation
-            # Ensure the order matches self.movie_ids
             self.movie_embedding_matrix = np.array([self.movie_embeddings_dict[mid] for mid in self.movie_ids])
 
-            # Load movie titles for display
             movies_file_path = MOVIELENS_DIR / "u.item"
             movie_cols = ['item_id', 'title']
             self.movies_df = pd.read_csv(
@@ -128,17 +119,17 @@ class EmbeddingRecommender:
                 usecols=[0, 1], names=movie_cols, index_col='item_id'
             )
             self.titles_loaded = True
-            print(f"Loaded embeddings for {len(self.movie_ids)} movies.")
-            print(f"Loaded titles for {len(self.movies_df)} movies.")
+            #print(f"Loaded embeddings for {len(self.movie_ids)} movies.")
+            #print(f"Loaded titles for {len(self.movies_df)} movies.")
 
         except FileNotFoundError as e:
-            print(f"Error loading data: {e}")
-            print("Make sure 'movie_embeddings_openai.json' and 'u.item' exist.")
-            print("Movie embeddings need to be generated first (can use OpenAI or Gemini).")
+            #print(f"Error loading data: {e}")
+            #print("Make sure 'movie_embeddings_openai.json' and 'u.item' exist.")
+            #print("Movie embeddings need to be generated first (can use OpenAI or Gemini).")
             self.titles_loaded = False
             raise
         except Exception as e:
-             print(f"An unexpected error occurred during loading: {e}")
+             #print(f"An unexpected error occurred during loading: {e}")
              self.titles_loaded = False
              raise
 
@@ -168,73 +159,58 @@ class EmbeddingRecommender:
         :param top_k: Number of recommendations to return
         :return: List of tuples (movie_title, similarity_score, item_id) or empty list
         """
-        print("\nGenerating profile text...")
+        #print("\nGenerating profile text...")
         user_profile_text = self._generate_user_profile_text(age, gender, occupation, liked_genres, liked_movies, disliked_movies)
-        print(f"Generated Profile: {user_profile_text}")
+        #print(f"Generated Profile: {user_profile_text}")
 
-        print("Generating embedding for user profile using OpenAI...")
-        user_embedding = get_openai_embedding(user_profile_text) # Uses the OpenAI function
+        #print("Generating embedding for user profile using OpenAI...")
+        user_embedding = get_openai_embedding(user_profile_text)
 
         if user_embedding is None:
-            print("Failed to generate user embedding. Cannot provide recommendations.")
+            #print("Failed to generate user embedding. Cannot provide recommendations.")
             return []
 
-        # Reshape for cosine_similarity
         user_embedding = user_embedding.reshape(1, -1)
 
-        print("Calculating similarity between user profile and all movies...")
-        # Calculate cosine similarity between the new user profile embedding and all movie embeddings
-        similarities = cosine_similarity(user_embedding, self.movie_embedding_matrix)[0] # Get the 1D array
+        #print("Calculating similarity between user profile and all movies...")
+        similarities = cosine_similarity(user_embedding, self.movie_embedding_matrix)[0]
 
-        # Get the indices of the top_k most similar movies
-        # Argsort sorts in ascending order, so we take the last k elements [::-1] reverses to descending
         initial_fetch_k = top_k + 5
         top_k_indices = np.argsort(similarities)[-initial_fetch_k:][::-1]
 
-        # Get the corresponding movie IDs and scores
         potential_movie_ids = [self.movie_ids[i] for i in top_k_indices]
         potential_scores = [similarities[i] for i in top_k_indices]
 
 
-        recommendations = [] # Final list of recommendations
+        recommendations = []
         if self.titles_loaded:
             for item_id, score in zip(potential_movie_ids, potential_scores):
-                # Stop if we already have top_k valid recommendations
                 if len(recommendations) >= top_k:
                     break
 
                 try:
                     title = self.movies_df.loc[item_id]['title']
 
-                    # --- Add this check to skip 'unknown' titles ---
                     if title.strip().lower() == 'unknown':
-                        print(f"Skipping item ID {item_id} because title is 'unknown'.")
-                        continue # Skip to the next item in the loop
+                        #print(f"Skipping item ID {item_id} because title is 'unknown'.")
+                        continue
 
-                    # Filter disliked titles if provided
                     if disliked_movies and title in disliked_movies:
-                        print(f"Skipping disliked movie: {title}")
-                        continue # Skip to the next item
+                        #print(f"Skipping disliked movie: {title}")
+                        continue
 
-                    # If the movie passed all checks, add it to the list
                     recommendations.append((title, score, item_id))
 
                 except KeyError:
-                    # Skip if the item ID isn't found in the movies dataframe
-                    print(f"Warning: Movie ID {item_id} not found in title mapping. Skipping.")
+                    #print(f"Warning: Movie ID {item_id} not found in title mapping. Skipping.")
                     continue
                 except Exception as e:
-                    # Skip on any other unexpected error during title lookup
-                    print(f"Error retrieving title for {item_id}: {e}. Skipping.")
+                    #print(f"Error retrieving title for {item_id}: {e}. Skipping.")
                     continue
         else:
-            # Fallback if titles aren't loaded (just use IDs, no skipping of 'unknown')
-            # Ensure we don't exceed top_k
             recommendations = list(zip(potential_movie_ids, potential_scores))[:top_k]
 
-
-        # Return the curated list (might have slightly fewer than top_k if many were skipped)
-        return recommendations # This list now excludes 'unknown' titles
+        return recommendations
 
 
 if __name__ == "__main__":
@@ -252,13 +228,13 @@ if __name__ == "__main__":
 
  #--------------------------------------------------Naive Method--------------------------------------------------------------------------
     
-    print("Naive Method:")
+    #print("Naive Method:")
     recommender = NaiveRecommendation()
     recommender.train(user_item_matrix)
 
     for user_index in range(user_item_matrix.shape[0]):
         recommendations = recommender.recommend(user_index, top_k=2)
-        print(f"Recommended items for user {user_index}: {recommendations}")
+        #print(f"Recommended items for user {user_index}: {recommendations}")
 
 #------------------------------------------------Included Embeddings----------------------------------------------------------------------------
 

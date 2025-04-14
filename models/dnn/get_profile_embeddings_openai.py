@@ -22,10 +22,10 @@ PROCESSED_DATA_DIR = DATA_DIR / "processed"
 # Reads API key from environment variable OPENAI_API_KEY
 try:
     client = OpenAI()
-    print("OpenAI client initialized.")
+    #print("OpenAI client initialized.")
 except Exception as e:
-    print(f"Error initializing OpenAI client: {e}")
-    print("Ensure OPENAI_API_KEY environment variable is set.")
+    #print(f"Error initializing OpenAI client: {e}")
+    #print("Ensure OPENAI_API_KEY environment variable is set.")
     client = None
 
 # Choose an OpenAI embedding model
@@ -33,14 +33,14 @@ except Exception as e:
 # text-embedding-3-large offers higher dimensionality (potentially better performance, higher cost)
 # text-embedding-ada-002 is an older option
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
-print(f"Using OpenAI embedding model: {OPENAI_EMBEDDING_MODEL}")
+#print(f"Using OpenAI embedding model: {OPENAI_EMBEDDING_MODEL}")
 
 
 # --- Load Data ---
 try:
     user_texts = pd.read_csv(PROCESSED_DATA_DIR / "user_texts_for_llm.csv")
     movie_texts = pd.read_csv(PROCESSED_DATA_DIR / "movie_texts_for_llm.csv")
-    print("Loaded user and movie text profiles.")
+    #print("Loaded user and movie text profiles.")
 except FileNotFoundError as e:
      print(f"Error loading text profiles: {e}")
      print("Ensure 'get_text_profiles.py' was run successfully and files are in the correct 'processed' directory.")
@@ -57,7 +57,7 @@ except FileNotFoundError as e:
 def get_openai_embedding(text: str) -> List[float] | None: # Return type hint updated
     """Generates an embedding using the OpenAI API."""
     if not client:
-        print("OpenAI client not available.")
+        #print("OpenAI client not available.")
         return None
     try:
         # OpenAI API might handle newlines poorly in some cases, replace just in case
@@ -93,10 +93,10 @@ def process_with_progress(df: pd.DataFrame, desc: str) -> pd.DataFrame:
 # --- Main Execution ---
 if __name__ == "__main__":
     if client is None:
-        print("Exiting because OpenAI client could not be initialized.")
+        #print("Exiting because OpenAI client could not be initialized.")
         exit()
 
-    print("Starting processing...")
+    #print("Starting processing...")
     user_texts_with_embeddings = process_with_progress(user_texts, "Processing user data with OpenAI")
     movie_texts_with_embeddings = process_with_progress(movie_texts, "Processing movie data with OpenAI")
 
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     user_output_path = PROCESSED_DATA_DIR / "user_embeddings_openai.json" # Save with a new name
     movie_output_path = PROCESSED_DATA_DIR / "movie_embeddings_openai.json" # Save with a new name
 
-    print(f"Saving results to {user_output_path} and {movie_output_path}...")
+    #print(f"Saving results to {user_output_path} and {movie_output_path}...")
     user_texts_with_embeddings.to_json(user_output_path, orient="records", indent=2)
     movie_texts_with_embeddings.to_json(movie_output_path, orient="records", indent=2)
-    print("Done!")
+    #print("Done!")
