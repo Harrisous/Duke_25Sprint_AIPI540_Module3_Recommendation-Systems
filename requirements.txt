@@ -3,5 +3,10 @@ pandas
 google-genai
 tenacity
 tqdm
-torch
 scikit-learn
+numpy==1.23.5
+matplotlib==3.6.2
+requests==2.28.2
+torch==2.0.0+cpu --index-url https://download.pytorch.org/whl/cpu
+torchvision==0.15.0+cpu --index-url https://download.pytorch.org/whl/cpu
+torchaudio==0.15.0+cpu --index-url https://download.pytorch.org/whl/cpu
