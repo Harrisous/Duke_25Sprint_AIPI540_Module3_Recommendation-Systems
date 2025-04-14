@@ -49,7 +49,7 @@ class HybridRecModel(nn.Module):
         self.user_id_emb = nn.Embedding(num_users, id_emb_dim)
         self.item_id_emb = nn.Embedding(num_items, id_emb_dim)
 
-        self.user_llm_emb = user_llm_emb  # 固定不训练
+        self.user_llm_emb = user_llm_emb  # Fixed, not trainable
         self.item_llm_emb = item_llm_emb
 
         self.total_dim = id_emb_dim + llm_emb_dim
@@ -70,7 +70,7 @@ class HybridRecModel(nn.Module):
             nn.Linear(512, 256),
         )
 
-        # 初始化 ID embedding
+        # Initialize ID embedding
         nn.init.normal_(self.user_id_emb.weight, std=0.01)
         nn.init.normal_(self.item_id_emb.weight, std=0.01)
 
