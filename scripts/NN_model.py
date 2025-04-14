@@ -188,32 +188,53 @@ class EmbeddingRecommender:
 
         # Get the indices of the top_k most similar movies
         # Argsort sorts in ascending order, so we take the last k elements [::-1] reverses to descending
-        top_k_indices = np.argsort(similarities)[-top_k:][::-1]
+        initial_fetch_k = top_k + 5
+        top_k_indices = np.argsort(similarities)[-initial_fetch_k:][::-1]
 
         # Get the corresponding movie IDs and scores
-        recommended_movie_ids = [self.movie_ids[i] for i in top_k_indices]
-        recommendation_scores = [similarities[i] for i in top_k_indices]
+        potential_movie_ids = [self.movie_ids[i] for i in top_k_indices]
+        potential_scores = [similarities[i] for i in top_k_indices]
 
-        recommendations = []
+
+        recommendations = [] # Final list of recommendations
         if self.titles_loaded:
-            for item_id, score in zip(recommended_movie_ids, recommendation_scores):
+            for item_id, score in zip(potential_movie_ids, potential_scores):
+                # Stop if we already have top_k valid recommendations
+                if len(recommendations) >= top_k:
+                    break
+
                 try:
                     title = self.movies_df.loc[item_id]['title']
-                    # Basic filtering: skip if movie title was explicitly disliked
+
+                    # --- Add this check to skip 'unknown' titles ---
+                    if title.strip().lower() == 'unknown':
+                        print(f"Skipping item ID {item_id} because title is 'unknown'.")
+                        continue # Skip to the next item in the loop
+
+                    # Filter disliked titles if provided
                     if disliked_movies and title in disliked_movies:
                         print(f"Skipping disliked movie: {title}")
-                        continue
-                    recommendations.append((title, score, item_id))
-                except KeyError:
-                    print(f"Warning: Could not find title for item ID {item_id}")
-                except Exception as e:
-                    print(f"Error retrieving title for {item_id}: {e}")
-        else:
-            # Return IDs and scores if titles aren't loaded
-            recommendations = list(zip(recommended_movie_ids, recommendation_scores))
+                        continue # Skip to the next item
 
-        # Adjust if filtering reduced the count below top_k
-        return recommendations[:top_k]
+                    # If the movie passed all checks, add it to the list
+                    recommendations.append((title, score, item_id))
+
+                except KeyError:
+                    # Skip if the item ID isn't found in the movies dataframe
+                    print(f"Warning: Movie ID {item_id} not found in title mapping. Skipping.")
+                    continue
+                except Exception as e:
+                    # Skip on any other unexpected error during title lookup
+                    print(f"Error retrieving title for {item_id}: {e}. Skipping.")
+                    continue
+        else:
+            # Fallback if titles aren't loaded (just use IDs, no skipping of 'unknown')
+            # Ensure we don't exceed top_k
+            recommendations = list(zip(potential_movie_ids, potential_scores))[:top_k]
+
+
+        # Return the curated list (might have slightly fewer than top_k if many were skipped)
+        return recommendations # This list now excludes 'unknown' titles
 
 
 if __name__ == "__main__":
