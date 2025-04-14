@@ -31,8 +31,9 @@ model.load_state_dict(torch.load(CURRENT_DIR / "models" / "model_v2.pth"))
 model.eval()
 
 def get_recommendations(user_id, user_text=None, num_recommendations=10):
-    uidx = user_id_map.get(user_id, None)
+    uidx = user_id_map.get(str(user_id), None)
     if uidx is None:
+        print(f"== User {user_id} not found, using fallback user_text: {user_text} ==")
         user_vec = model.get_fallback_user_with_text(user_text)
     else:
         user_vec = model.user_llm_emb[uidx].unsqueeze(0)
@@ -48,12 +49,13 @@ def get_recommendations(user_id, user_text=None, num_recommendations=10):
 
 
 def predict(model, user_vec, item_id):
-    iidx = item_id_map.get(item_id, None)
+    iidx = item_id_map.get(str(item_id), None)
 
     with torch.no_grad():
         if iidx is not None:
             item_vec = model.item_llm_emb[iidx].unsqueeze(0)
         else:
+            print(f"== Item {item_id} not found, using fallback item ==")
             item_vec = model.get_fallback_item()
 
         # Process through MLP layers
@@ -69,5 +71,5 @@ def predict(model, user_vec, item_id):
 if __name__ == "__main__":
     # Example
     print("\nPredicting recommended movies for user:")
-    for iidx, pred, text in get_recommendations(user_id=9999, user_text="age: 24, gender: M, occupation: technician. I like Sci-Fi movies.", num_recommendations=10):
+    for iidx, pred, text in get_recommendations(user_id=1, user_text="Age: 33, gender: M, occupation: none. Rating history includes: 'Star Trek III: The Search for Spock (1984)' (Genre: Action, Adventure, Sci-Fi) rated 5 stars", num_recommendations=10):
         print(f"Movie ID: {iidx}, Rating: {pred}, Description: {text}")
