@@ -22,7 +22,8 @@ def download_movielens_100k():
 
         # unzip to raw
         import zipfile
-        with zipfile.ZipFile(temp_data_dir / "movielens-100k.zip", 'r') as zip_ref:
+
+        with zipfile.ZipFile(temp_data_dir / "movielens-100k.zip", "r") as zip_ref:
             zip_ref.extractall(CURRENT_DIR / "raw")
 
         # remove temp directory

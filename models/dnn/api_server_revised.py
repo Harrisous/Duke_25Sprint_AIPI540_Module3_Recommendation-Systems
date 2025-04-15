@@ -145,7 +145,9 @@ def get_prediction(request: PredictionRequest) -> float:
 
 
 @app.post("/recommendations", response_model=List[MovieRecommendation])
-def get_user_recommendations(request: RecommendationRequest) -> List[MovieRecommendation]:
+def get_user_recommendations(
+    request: RecommendationRequest,
+) -> List[MovieRecommendation]:
     """
     Generate personalized movie recommendations for a user.
 
