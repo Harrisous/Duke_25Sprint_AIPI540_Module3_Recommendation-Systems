@@ -135,13 +135,13 @@ def load_rating_matrix_and_dims(ratings_file_path):
         rating_matrix = ratings_df.pivot_table(index='user_id', columns='item_id', values='rating').fillna(0)
         rating_matrix = rating_matrix.reindex(index=range(1, max_user_id + 1), columns=range(1, max_item_id + 1), fill_value=0)
         rating_matrix_np = rating_matrix.values.astype(np.float32)
-        st.success(f"Rating matrix loaded ({rating_matrix_np.shape})") # Feedback in UI
+        print(f"Rating matrix loaded ({rating_matrix_np.shape})") # Feedback in UI
         return rating_matrix_np, max_user_id, max_item_id
     except FileNotFoundError:
-        st.error(f"Ratings file not found at {ratings_file_path}")
+        print(f"Ratings file not found at {ratings_file_path}")
         return None, None, None
     except Exception as e:
-        st.error(f"Error loading rating matrix: {e}")
+        print(f"Error loading rating matrix: {e}")
         return None, None, None
 
 
@@ -153,13 +153,13 @@ def load_trained_autorec_model(num_items, hidden_units, model_state_path='autore
         model.load_state_dict(torch.load(model_state_path, map_location=device))
         model.to(device)
         model.eval() # Set to evaluation mode
-        st.success("AutoRec model loaded successfully.") # Feedback in UI
+        print("AutoRec model loaded successfully.") # Feedback in UI
         return model, device
     except FileNotFoundError:
-        st.error(f"Trained AutoRec model state file not found at {model_state_path}")
+        print(f"Trained AutoRec model state file not found at {model_state_path}")
         return None, None
     except Exception as e:
-        st.error(f"Error loading AutoRec model state: {e}")
+        print(f"Error loading AutoRec model state: {e}")
         return None, None
 
 
@@ -231,13 +231,13 @@ try:
         names=movie_cols, usecols=[0, 1, 2, 3, 4], index_col='item_id'
     )
     titles_loaded_global = True
-    st.success(f"Movie titles loaded from {move_info_path}") # Added success message
+    print(f"Movie titles loaded from {move_info_path}") # Added success message
 except FileNotFoundError:
-    st.error(f"Movie file not found at {move_info_path}. Some features might not work.")
+    print(f"Movie file not found at {move_info_path}. Some features might not work.")
     movies_df = None
     titles_loaded_global = False
 except Exception as e:
-    st.error(f"Error loading movie file: {e}")
+    print(f"Error loading movie file: {e}")
     movies_df = None
     titles_loaded_global = False
 
@@ -264,7 +264,8 @@ page = st.sidebar.radio(
 if page == "Naive Approach (cold start)":
     st.title("Naive Approach (cold start)")
     st.write("### Select movies and provide ratings (1-5) as much as you can:")
-
+    naive_image_path = os.path.join("pic", "Naive.jpg")
+    st.image(naive_image_path,  use_container_width=True)
     # List of available movie names
     available_movies = movie_list
 
@@ -313,7 +314,8 @@ if page == "Naive Approach (cold start)":
 elif page == "Naive Approach (existing user)":
     st.title("Naive Approach (existing user)")
     st.write("### Select a user ID to get recommendations:")
-
+    naive_image_path = os.path.join("pic", "Naive.jpg")
+    st.image(naive_image_path,  use_container_width=True)
     # Dropdown for selecting user ID
     naive_recommender = NaiveRecommendation(is_auto_loaded=True)
     user_num = naive_recommender.user_item_matrix.shape[0]
@@ -339,7 +341,9 @@ elif page == "Naive Approach (existing user)":
 elif page == "Machine Learning Approach":
     st.title("Machine Learning Approach (AutoRec)")
     st.write("Recommendations based on learned user preferences from ratings.")
-
+    for i in range(2):
+        ML_image_path = os.path.join("pic", f"ML_p{i+1}.jpg")
+        st.image(ML_image_path,  use_container_width=True)
     # Load rating matrix and model
     # Define path to ratings data
     ratings_file_path = os.path.join("data", "raw", "ml-100k", "u.data")
@@ -391,6 +395,9 @@ elif page == "Machine Learning Approach":
 elif page == "Deep Learning Approach":
     st.title("Deep Learning Approach")
     st.write("### Provide your information to get recommendations:")
+    for i in range(3):
+        NN_image_path = os.path.join("pic", f"NN_p{i+1}.jpg")
+        st.image(NN_image_path,  use_container_width=True)
 
     # Selection box to ask if the user has a user_id
     has_user_id = st.selectbox(
