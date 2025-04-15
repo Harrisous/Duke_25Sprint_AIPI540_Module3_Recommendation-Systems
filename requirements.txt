@@ -5,3 +5,6 @@ tenacity
 tqdm
 torch
 scikit-learn
+fastapi
+uvicorn
+python-dotenv

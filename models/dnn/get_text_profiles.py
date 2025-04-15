@@ -1,3 +1,4 @@
+import json
 import pandas as pd
 import os
 import pathlib
@@ -19,6 +20,9 @@ movie_columns = ["item_id", "title", "release_date", "video_release_date", "imdb
 movies = pd.read_csv(RAW_DATA_DIR / "ml-100k/u.item", sep="|", encoding="latin-1", header=None,
                      names=movie_columns, usecols=range(5 + len(genres)))
 
+user_id_map = json.load(open(DATA_DIR / "processed" / "user_id_map.json"))
+item_id_map = json.load(open(DATA_DIR / "processed" / "item_id_map.json"))
+
 # Generate genre labels for each movie
 def extract_genres(row):
     return [genre for genre in genres if row[genre] == 1]
@@ -35,9 +39,9 @@ movies["llm_text"] = movies.apply(
 movie_title_map = dict(zip(movies["item_id"], movies["title"]))
 
 # Construct rating history lookup table (for assembling user rating history)
-merged = ratings.merge(movies[["item_id", "title"]], on="item_id")
+merged = ratings.merge(movies[["item_id", "title", "genres"]], on="item_id")
 user_history = merged.groupby("user_id").apply(
-    lambda x: [f"'{row['title']}' rated {int(row['rating'])} stars" for _, row in x.iterrows()]
+    lambda x: [f"'{row['title']}' (Genre: {', '.join(row['genres'])}) rated {int(row['rating'])} stars" for _, row in x.iterrows()]
 ).to_dict()
 
 # User text format
@@ -53,8 +57,16 @@ def make_user_text(row):
 users["llm_text"] = users.apply(make_user_text, axis=1)
 
 # Save user and movie texts
-user_texts = users[["user_id", "llm_text"]]
-movie_texts = movies[["item_id", "llm_text"]]
+user_texts = users[["user_id", "llm_text"]].copy()  # Create a copy instead of a view
+movie_texts = movies[["item_id", "llm_text"]].copy()  # Create a copy instead of a view
+
+# Using loc for assignment
+user_texts.loc[:, "user_idx"] = user_texts["user_id"].map(lambda x: user_id_map[str(x)])
+movie_texts.loc[:, "item_idx"] = movie_texts["item_id"].map(lambda x: item_id_map[str(x)])
+
+# Sort user_texts by user_idx in ascending order
+user_texts = user_texts.sort_values(by="user_idx", ascending=True)
+movie_texts = movie_texts.sort_values(by="item_idx", ascending=True)
 
 user_texts.to_csv(DATA_DIR / "processed" / "user_texts_for_llm.csv", index=False)
 movie_texts.to_csv(DATA_DIR / "processed" / "movie_texts_for_llm.csv", index=False)
