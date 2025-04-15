@@ -262,6 +262,13 @@ if __name__ == "__main__":
              print(f"{i+1}. {title_str} - Predicted Rating: {rec['predicted_rating']:.4f}")
     else:
         print(f"\nNo recommendations could be generated for user {target_user_id}.")
+    
+    # --- After the training loop ---
+    #print("Saving trained model state...")
+    MODEL_SAVE_PATH = 'autorec_model_state.pth' # Save in the same directory as the script for simplicity
+    torch.save(autorec_model.state_dict(), MODEL_SAVE_PATH)
+    #print(f"Model state saved to {MODEL_SAVE_PATH}")
+
 
     # Optional: Plot training RMSE
     import matplotlib.pyplot as plt
