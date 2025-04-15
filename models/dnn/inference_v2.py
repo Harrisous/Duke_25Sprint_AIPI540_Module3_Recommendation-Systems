@@ -13,7 +13,16 @@ DATA_DIR = CURRENT_DIR / ".." / ".." / "data"
 
 sys.path.append(CURRENT_DIR.absolute())
 
-from model_v2 import HybridRecModel, user_ids, item_ids, user_llm_emb, item_llm_emb, user_id_map, item_id_map, item_llm_data
+from model_v2 import (
+    HybridRecModel,
+    user_ids,
+    item_ids,
+    user_llm_emb,
+    item_llm_emb,
+    user_id_map,
+    item_id_map,
+    item_llm_data,
+)
 
 
 # Initialize model
@@ -23,12 +32,13 @@ model = HybridRecModel(
     id_emb_dim=64,
     llm_emb_dim=user_llm_emb.shape[1],
     user_llm_emb=user_llm_emb,
-    item_llm_emb=item_llm_emb
+    item_llm_emb=item_llm_emb,
 )
 
 model.load_state_dict(torch.load(CURRENT_DIR / "models" / "model_v2.pth"))
 
 model.eval()
+
 
 def get_recommendations(user_id, user_text=None, num_recommendations=10):
     uidx = user_id_map.get(str(user_id), None)
@@ -37,7 +47,7 @@ def get_recommendations(user_id, user_text=None, num_recommendations=10):
         user_vec = model.get_fallback_user_with_text(user_text)
     else:
         user_vec = model.user_llm_emb[uidx].unsqueeze(0)
-    
+
     recommendations = []
     for iidx in item_id_map.keys():
         pred = predict(model, user_vec, iidx)
@@ -61,16 +71,21 @@ def predict(model, user_vec, item_id):
         # Process through MLP layers
         user_vec = model.user_mlp(user_vec)
         item_vec = model.item_mlp(item_vec)
-        
+
         # Calculate similarity and map to 1-5 range
         similarity = F.cosine_similarity(user_vec, item_vec)
         # rating = 1 + 2 * (similarity + 1)  # Map [-1,1] to [1,5]
-        rating = 1 + 4 * (similarity ** 2)  # non-linear mapping, to help with cold start
+        rating = 1 + 4 * (similarity**2)  # non-linear mapping, to help with cold start
 
         return rating.item()
+
 
 if __name__ == "__main__":
     # Example
     print("\nPredicting recommended movies for user:")
-    for iidx, pred, text in get_recommendations(user_id=1, user_text="Age: 33, gender: M, occupation: none. Rating history includes: 'Star Trek III: The Search for Spock (1984)' (Genre: Action, Adventure, Sci-Fi) rated 5 stars", num_recommendations=10):
+    for iidx, pred, text in get_recommendations(
+        user_id=1,
+        user_text="Age: 33, gender: M, occupation: none. Rating history includes: 'Star Trek III: The Search for Spock (1984)' (Genre: Action, Adventure, Sci-Fi) rated 5 stars",
+        num_recommendations=10,
+    ):
         print(f"Movie ID: {iidx}, Rating: {pred}, Description: {text}")

@@ -12,7 +12,16 @@ DATA_DIR = CURRENT_DIR / ".." / ".." / "data"
 
 sys.path.append(CURRENT_DIR.absolute())
 
-from model import HybridRecModel, user_ids, item_ids, user_llm_emb, item_llm_emb, user_id_map, item_id_map, item_llm_data
+from model import (
+    HybridRecModel,
+    user_ids,
+    item_ids,
+    user_llm_emb,
+    item_llm_emb,
+    user_id_map,
+    item_id_map,
+    item_llm_data,
+)
 
 
 # Initialize model
@@ -22,23 +31,27 @@ model = HybridRecModel(
     id_emb_dim=64,
     llm_emb_dim=user_llm_emb.shape[1],
     user_llm_emb=user_llm_emb,
-    item_llm_emb=item_llm_emb
+    item_llm_emb=item_llm_emb,
 )
 
 model.load_state_dict(torch.load(CURRENT_DIR / "models" / "model.pth"))
 
 model.eval()
 
+
 def get_recommendations(user_id, user_text=None, num_recommendations=10):
     uidx = user_id_map.get(user_id, None)
     if uidx is None:
         user_vec = model.get_fallback_user_with_text(user_text)
     else:
-        user_vec = torch.cat([
-            model.user_id_emb(torch.tensor([uidx])),
-            model.user_llm_emb[uidx].unsqueeze(0)
-        ], dim=1)
-    
+        user_vec = torch.cat(
+            [
+                model.user_id_emb(torch.tensor([uidx])),
+                model.user_llm_emb[uidx].unsqueeze(0),
+            ],
+            dim=1,
+        )
+
     recommendations = []
     for iidx in item_id_map.keys():
         pred = predict(model, user_vec, iidx)
@@ -54,10 +67,13 @@ def predict(model, user_vec, item_id):
 
     with torch.no_grad():
         if iidx is not None:
-            item_vec = torch.cat([
-                model.item_id_emb(torch.tensor([iidx])),
-                model.item_llm_emb[iidx].unsqueeze(0)
-            ], dim=1)
+            item_vec = torch.cat(
+                [
+                    model.item_id_emb(torch.tensor([iidx])),
+                    model.item_llm_emb[iidx].unsqueeze(0),
+                ],
+                dim=1,
+            )
         else:
             item_vec = model.get_fallback_item()
 
@@ -67,7 +83,12 @@ def predict(model, user_vec, item_id):
 
         return (user_vec * item_vec).sum().item()
 
+
 # Example
 print("\nPredicting recommended movies for user:")
-for iidx, pred, text in get_recommendations(user_id=9999, user_text="age: 24, gender: M, occupation: technician. I like Sci-Fi movies.", num_recommendations=10):
+for iidx, pred, text in get_recommendations(
+    user_id=9999,
+    user_text="age: 24, gender: M, occupation: technician. I like Sci-Fi movies.",
+    num_recommendations=10,
+):
     print(f"Movie ID: {iidx}, Rating: {pred}, Description: {text}")
