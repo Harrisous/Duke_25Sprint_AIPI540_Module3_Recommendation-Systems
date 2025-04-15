@@ -1,12 +1,12 @@
-import numpy as np
-import pandas as pd
+import io  # For downloading data if needed
 import os
 import pathlib
-import requests # For downloading data if needed
-import zipfile # For downloading data if needed
-import io # For downloading data if needed
-import shutil # For removing temp download dir
+import shutil  # For removing temp download dir
+import zipfile  # For downloading data if needed
 
+import numpy as np
+import pandas as pd
+import requests  # For downloading data if needed
 # --- PyTorch Specific Imports ---
 import torch
 import torch.nn as nn
@@ -20,7 +20,9 @@ CURRENT_DIR = pathlib.Path().resolve()
 DATA_DIR = CURRENT_DIR / "data" if (CURRENT_DIR / "data").exists() else CURRENT_DIR
 RAW_DATA_DIR = DATA_DIR / "raw"
 MOVIELENS_DIR = RAW_DATA_DIR / "ml-100k"
-PROCESSED_DATA_DIR = DATA_DIR / "processed" # Not used by AutoRec but kept for consistency
+PROCESSED_DATA_DIR = (
+    DATA_DIR / "processed"
+)  # Not used by AutoRec but kept for consistency
 
 
 # --- 1. Load and Prepare Data ---
@@ -29,34 +31,40 @@ ratings_file = MOVIELENS_DIR / "u.data"
 movies_file_path = MOVIELENS_DIR / "u.item"
 
 try:
-    ratings_cols = ['user_id', 'item_id', 'rating', 'timestamp']
-    ratings_df = pd.read_csv(ratings_file, sep='\t', names=ratings_cols, engine='python')
+    ratings_cols = ["user_id", "item_id", "rating", "timestamp"]
+    ratings_df = pd.read_csv(
+        ratings_file, sep="\t", names=ratings_cols, engine="python"
+    )
     print(f"Loaded {len(ratings_df)} ratings.")
 
-    max_user_id = ratings_df['user_id'].max()
-    max_item_id = ratings_df['item_id'].max()
+    max_user_id = ratings_df["user_id"].max()
+    max_item_id = ratings_df["item_id"].max()
     print(f"Max User ID: {max_user_id}, Max Item ID: {max_item_id}")
 
     # Create the User-Item Rating Matrix (Users as rows, Items as columns)
-    rating_matrix = ratings_df.pivot_table(index='user_id', columns='item_id', values='rating').fillna(0)
+    rating_matrix = ratings_df.pivot_table(
+        index="user_id", columns="item_id", values="rating"
+    ).fillna(0)
     # Reindex to ensure matrix covers all IDs from 1 to max
-    rating_matrix = rating_matrix.reindex(index=range(1, max_user_id + 1), columns=range(1, max_item_id + 1), fill_value=0)
+    rating_matrix = rating_matrix.reindex(
+        index=range(1, max_user_id + 1), columns=range(1, max_item_id + 1), fill_value=0
+    )
 
-    rating_matrix_np = rating_matrix.values.astype(np.float32) # Use float32
+    rating_matrix_np = rating_matrix.values.astype(np.float32)  # Use float32
 
     actual_num_users = rating_matrix_np.shape[0]
     actual_num_items = rating_matrix_np.shape[1]
-    print(f"Rating matrix shape: {rating_matrix_np.shape}") # (Users x Items)
+    print(f"Rating matrix shape: {rating_matrix_np.shape}")  # (Users x Items)
 
     # Convert to PyTorch Tensor
     rating_tensor = torch.FloatTensor(rating_matrix_np)
 
     # Create Dataset and DataLoader (each sample is a user's rating vector)
-    dataset = TensorDataset(rating_tensor) # Input and target are the same row
+    dataset = TensorDataset(rating_tensor)  # Input and target are the same row
 
 except FileNotFoundError:
-     print(f"Error: Ratings file not found at {ratings_file}")
-     exit()
+    print(f"Error: Ratings file not found at {ratings_file}")
+    exit()
 except Exception as e:
     print(f"An error occurred during data preparation: {e}")
     exit()
@@ -68,12 +76,13 @@ def masked_mse_loss(y_true, y_pred):
     """
     Calculates Mean Squared Error only on non-zero entries in y_true (PyTorch version).
     """
-    mask = (y_true != 0).float() # Create a mask for observed ratings
+    mask = (y_true != 0).float()  # Create a mask for observed ratings
     squared_error = (y_pred - y_true).pow(2)
     masked_squared_error = squared_error * mask
     # Add small epsilon to avoid division by zero
     loss = torch.sum(masked_squared_error) / (torch.sum(mask) + 1e-8)
     return loss
+
 
 # --- 3. Build the Shallow Autoencoder Model (U-AutoRec) in PyTorch ---
 class AutoRec(nn.Module):
@@ -81,7 +90,7 @@ class AutoRec(nn.Module):
         super(AutoRec, self).__init__()
         # Encoder/Hidden Layer
         self.encoder = nn.Linear(num_items, hidden_units)
-        self.activation = nn.ReLU() # Or nn.Sigmoid(), nn.Tanh()
+        self.activation = nn.ReLU()  # Or nn.Sigmoid(), nn.Tanh()
         # Optional: Dropout
         # self.dropout = nn.Dropout(0.5)
         # Decoder/Output Layer
@@ -94,9 +103,10 @@ class AutoRec(nn.Module):
         x = self.decoder(x)
         return x
 
+
 # Model Hyperparameters
 HIDDEN_UNITS = 256
-L2_REG = 0.001 # Corresponds to weight_decay in Adam optimizer
+L2_REG = 0.001  # Corresponds to weight_decay in Adam optimizer
 LEARNING_RATE = 0.001
 EPOCHS = 50
 BATCH_SIZE = 128
@@ -111,7 +121,9 @@ autorec_model.to(device)
 
 # --- Define Optimizer ---
 # Use weight_decay for L2 regularization
-optimizer = optim.Adam(autorec_model.parameters(), lr=LEARNING_RATE, weight_decay=L2_REG)
+optimizer = optim.Adam(
+    autorec_model.parameters(), lr=LEARNING_RATE, weight_decay=L2_REG
+)
 
 # --- Create DataLoader ---
 dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
@@ -120,7 +132,7 @@ dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 print("\nStarting AutoRec model training (PyTorch)...")
 train_losses = []
 for epoch in range(EPOCHS):
-    autorec_model.train() # Set model to training mode
+    autorec_model.train()  # Set model to training mode
     epoch_loss = 0.0
     num_batches = 0
 
@@ -135,7 +147,9 @@ for epoch in range(EPOCHS):
         reconstructed_vectors = autorec_model(user_vectors)
 
         # Calculate loss (only on observed ratings)
-        loss = masked_mse_loss(user_vectors, reconstructed_vectors) # Input is also the target
+        loss = masked_mse_loss(
+            user_vectors, reconstructed_vectors
+        )  # Input is also the target
 
         # Backward pass
         loss.backward()
@@ -147,9 +161,11 @@ for epoch in range(EPOCHS):
         num_batches += 1
 
     avg_epoch_loss = epoch_loss / num_batches
-    epoch_rmse = np.sqrt(avg_epoch_loss) # Calculate RMSE from average MSE loss
+    epoch_rmse = np.sqrt(avg_epoch_loss)  # Calculate RMSE from average MSE loss
     train_losses.append(epoch_rmse)
-    print(f"Epoch [{epoch+1}/{EPOCHS}], Loss (MSE): {avg_epoch_loss:.6f}, RMSE: {epoch_rmse:.6f}")
+    print(
+        f"Epoch [{epoch+1}/{EPOCHS}], Loss (MSE): {avg_epoch_loss:.6f}, RMSE: {epoch_rmse:.6f}"
+    )
 
 print("Training complete.")
 
@@ -157,25 +173,37 @@ print("Training complete.")
 
 # Load movie titles
 try:
-    movie_cols = ['item_id', 'title']
+    movie_cols = ["item_id", "title"]
     movies_df = pd.read_csv(
-        movies_file_path, sep='|', encoding='latin-1', header=None,
-        usecols=[0, 1], names=movie_cols, index_col='item_id' # Use item_id as index
+        movies_file_path,
+        sep="|",
+        encoding="latin-1",
+        header=None,
+        usecols=[0, 1],
+        names=movie_cols,
+        index_col="item_id",  # Use item_id as index
     )
     titles_loaded = True
     print("\nLoaded movie titles.")
 except FileNotFoundError:
-    print(f"Warning: Movie titles file not found at {movies_file_path}. Cannot display titles.")
+    print(
+        f"Warning: Movie titles file not found at {movies_file_path}. Cannot display titles."
+    )
     titles_loaded = False
 
-def recommend_autorec_pytorch(user_id, model, full_rating_matrix_np, movies_info_df, top_k=10, device='cpu'):
+
+def recommend_autorec_pytorch(
+    user_id, model, full_rating_matrix_np, movies_info_df, top_k=10, device="cpu"
+):
     """
     Generates recommendations for a given user_id using the trained PyTorch AutoRec model.
     """
-    model.eval() # Set model to evaluation mode
+    model.eval()  # Set model to evaluation mode
 
     if user_id < 1 or user_id > full_rating_matrix_np.shape[0]:
-        print(f"Error: User ID {user_id} is out of valid range (1-{full_rating_matrix_np.shape[0]})")
+        print(
+            f"Error: User ID {user_id} is out of valid range (1-{full_rating_matrix_np.shape[0]})"
+        )
         return []
 
     user_index = user_id - 1
@@ -186,11 +214,13 @@ def recommend_autorec_pytorch(user_id, model, full_rating_matrix_np, movies_info
 
     # Predict ratings (no gradients needed)
     with torch.no_grad():
-        predicted_ratings_vector = model(user_vector_tensor)[0] # Get the single output vector
+        predicted_ratings_vector = model(user_vector_tensor)[
+            0
+        ]  # Get the single output vector
 
     # Move predictions back to CPU and convert to numpy
     predicted_ratings_np = predicted_ratings_vector.cpu().numpy()
-    original_ratings_np = user_vector_np[0] # Original ratings for filtering
+    original_ratings_np = user_vector_np[0]  # Original ratings for filtering
 
     # Get indices of items the user has NOT rated (original rating was 0)
     unrated_indices = np.where(original_ratings_np == 0)[0]
@@ -227,55 +257,75 @@ def recommend_autorec_pytorch(user_id, model, full_rating_matrix_np, movies_info
             # Score corresponds to the sorted prediction
             score = scores_to_sort[sorted_indices_local[i]]
             try:
-                title = movies_info_df.loc[item_id]['title']
-                 # Skip 'unknown' titles
-                if title.strip().lower() == 'unknown':
+                title = movies_info_df.loc[item_id]["title"]
+                # Skip 'unknown' titles
+                if title.strip().lower() == "unknown":
                     print(f"Skipping item ID {item_id} with 'unknown' title.")
                     continue
-                recommendations.append({'item_id': item_id, 'title': title, 'predicted_rating': score})
-                if len(recommendations) >= top_k: # Ensure we don't exceed top_k after skipping
+                recommendations.append(
+                    {"item_id": item_id, "title": title, "predicted_rating": score}
+                )
+                if (
+                    len(recommendations) >= top_k
+                ):  # Ensure we don't exceed top_k after skipping
                     break
             except KeyError:
                 print(f"Warning: Could not find title for item ID {item_id}. Skipping.")
                 continue
     else:
-         for i, item_id in enumerate(recommended_item_ids):
-             score = scores_to_sort[sorted_indices_local[i]]
-             recommendations.append({'item_id': item_id, 'predicted_rating': score})
-             if len(recommendations) >= top_k:
-                 break
+        for i, item_id in enumerate(recommended_item_ids):
+            score = scores_to_sort[sorted_indices_local[i]]
+            recommendations.append({"item_id": item_id, "predicted_rating": score})
+            if len(recommendations) >= top_k:
+                break
 
     return recommendations
 
+
 # --- Example Usage ---
 if __name__ == "__main__":
-    target_user_id = 50 # Example user ID (1 to 943)
-    print(f"\n--- Generating recommendations for User {target_user_id} using AutoRec (PyTorch) ---")
+    target_user_id = 50  # Example user ID (1 to 943)
+    print(
+        f"\n--- Generating recommendations for User {target_user_id} using AutoRec (PyTorch) ---"
+    )
 
     # Pass the numpy matrix, not the tensor, to the recommendation function
-    recommendations = recommend_autorec_pytorch(target_user_id, autorec_model, rating_matrix_np, movies_df, top_k=10, device=device)
+    recommendations = recommend_autorec_pytorch(
+        target_user_id,
+        autorec_model,
+        rating_matrix_np,
+        movies_df,
+        top_k=10,
+        device=device,
+    )
 
     if recommendations:
         print("\n--- Top Recommendations ---")
         for i, rec in enumerate(recommendations):
-             title_str = f"{rec['title']} (ID: {rec['item_id']})" if titles_loaded else f"Item ID: {rec['item_id']}"
-             print(f"{i+1}. {title_str} - Predicted Rating: {rec['predicted_rating']:.4f}")
+            title_str = (
+                f"{rec['title']} (ID: {rec['item_id']})"
+                if titles_loaded
+                else f"Item ID: {rec['item_id']}"
+            )
+            print(
+                f"{i+1}. {title_str} - Predicted Rating: {rec['predicted_rating']:.4f}"
+            )
     else:
         print(f"\nNo recommendations could be generated for user {target_user_id}.")
-    
-    # --- After the training loop ---
-    #print("Saving trained model state...")
-    MODEL_SAVE_PATH = 'autorec_model_state.pth' # Save in the same directory as the script for simplicity
-    torch.save(autorec_model.state_dict(), MODEL_SAVE_PATH)
-    #print(f"Model state saved to {MODEL_SAVE_PATH}")
 
+    # --- After the training loop ---
+    # print("Saving trained model state...")
+    MODEL_SAVE_PATH = "autorec_model_state.pth"  # Save in the same directory as the script for simplicity
+    torch.save(autorec_model.state_dict(), MODEL_SAVE_PATH)
+    # print(f"Model state saved to {MODEL_SAVE_PATH}")
 
     # Optional: Plot training RMSE
     import matplotlib.pyplot as plt
+
     plt.figure()
-    plt.plot(range(1, EPOCHS + 1), train_losses, marker='o', linestyle='-')
-    plt.title('Training RMSE per Epoch')
-    plt.xlabel('Epoch')
-    plt.ylabel('RMSE')
+    plt.plot(range(1, EPOCHS + 1), train_losses, marker="o", linestyle="-")
+    plt.title("Training RMSE per Epoch")
+    plt.xlabel("Epoch")
+    plt.ylabel("RMSE")
     plt.grid(True)
     plt.show()

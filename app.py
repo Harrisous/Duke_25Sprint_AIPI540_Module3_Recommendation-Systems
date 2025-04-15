@@ -1,35 +1,41 @@
-import torch
 import os
+
+import torch
+
 try:
     torch.classes.__path__ = []
-    #print("Applied torch.classes.__path__ workaround.")
+    # print("Applied torch.classes.__path__ workaround.")
 except Exception as e:
-    #print(f"Could not apply torch.classes workaround: {e}")
+    # print(f"Could not apply torch.classes workaround: {e}")
     torch.classes.__path__ = []
-import torch.nn as nn
-import streamlit as st
-from models.naive.naive_model import NaiveRecommendation
 import os
-import numpy as np
-import requests
-import pandas as pd
 import pathlib
 
+import numpy as np
+import pandas as pd
+import requests
+import streamlit as st
+import torch.nn as nn
+
+from models.naive.naive_model import NaiveRecommendation
 
 CURRENT_DIR = pathlib.Path().resolve()
 DATA_DIR = CURRENT_DIR / "data" if (CURRENT_DIR / "data").exists() else CURRENT_DIR
 RAW_DATA_DIR = DATA_DIR / "raw"
 MOVIELENS_DIR = RAW_DATA_DIR / "ml-100k"
-PROCESSED_DATA_DIR = DATA_DIR / "processed" # Define even if not used by AutoRec
+PROCESSED_DATA_DIR = DATA_DIR / "processed"  # Define even if not used by AutoRec
 
 move_info_path = MOVIELENS_DIR / "u.item"
 
+
 def extract_movie_info(file_path):
-    '''function to get the movie meta data'''
+    """function to get the movie meta data"""
     movie_dict = {}
-    with open(file_path, 'r', encoding='ISO-8859-1') as file:  # Encoding to handle special characters
+    with open(
+        file_path, "r", encoding="ISO-8859-1"
+    ) as file:  # Encoding to handle special characters
         for line in file:
-            fields = line.strip().split('|')
+            fields = line.strip().split("|")
             if len(fields) >= 5:  # Ensure there are enough fields
                 movie_id = fields[0]
                 movie_title = fields[1]
@@ -37,15 +43,17 @@ def extract_movie_info(file_path):
                 movie_dict[movie_title] = [movie_id, imdb_url]
     return movie_dict
 
+
 def get_movie_list(movie_dict):
-    '''function to generate the movie list'''
+    """function to generate the movie list"""
     movie_list = []
     for title, info in movie_dict.items():
         movie_list.append(title)
     return movie_list
 
+
 def make_naive_cold_recommendation(response_dict, movie_dict):
-    '''function to generate the recommendation'''
+    """function to generate the recommendation"""
     naive_recommender = NaiveRecommendation(is_auto_loaded=True)
     movie_num = naive_recommender.user_item_matrix.shape[1]
     user_vector = np.zeros(movie_num, dtype=int)
@@ -111,11 +119,14 @@ def make_DNN_recommendation(user_id, user_text, num_recommendations):
     else:
         return f"Failed to get recommendations. Status code: {response.status_code}, Response: {response.text}"
 
+
 class AutoRec(nn.Module):
     def __init__(self, num_items, hidden_units=512):
         super(AutoRec, self).__init__()
         self.encoder = nn.Linear(num_items, hidden_units)
-        self.activation = nn.ReLU() # Make sure this matches the activation used during training
+        self.activation = (
+            nn.ReLU()
+        )  # Make sure this matches the activation used during training
         self.decoder = nn.Linear(hidden_units, num_items)
 
     def forward(self, x):
@@ -125,17 +136,25 @@ class AutoRec(nn.Module):
         return x
 
 
-@st.cache_data 
+@st.cache_data
 def load_rating_matrix_and_dims(ratings_file_path):
     try:
-        ratings_cols = ['user_id', 'item_id', 'rating', 'timestamp']
-        ratings_df = pd.read_csv(ratings_file_path, sep='\t', names=ratings_cols, engine='python')
-        max_user_id = ratings_df['user_id'].max()
-        max_item_id = ratings_df['item_id'].max()
-        rating_matrix = ratings_df.pivot_table(index='user_id', columns='item_id', values='rating').fillna(0)
-        rating_matrix = rating_matrix.reindex(index=range(1, max_user_id + 1), columns=range(1, max_item_id + 1), fill_value=0)
+        ratings_cols = ["user_id", "item_id", "rating", "timestamp"]
+        ratings_df = pd.read_csv(
+            ratings_file_path, sep="\t", names=ratings_cols, engine="python"
+        )
+        max_user_id = ratings_df["user_id"].max()
+        max_item_id = ratings_df["item_id"].max()
+        rating_matrix = ratings_df.pivot_table(
+            index="user_id", columns="item_id", values="rating"
+        ).fillna(0)
+        rating_matrix = rating_matrix.reindex(
+            index=range(1, max_user_id + 1),
+            columns=range(1, max_item_id + 1),
+            fill_value=0,
+        )
         rating_matrix_np = rating_matrix.values.astype(np.float32)
-        print(f"Rating matrix loaded ({rating_matrix_np.shape})") # Feedback in UI
+        print(f"Rating matrix loaded ({rating_matrix_np.shape})")  # Feedback in UI
         return rating_matrix_np, max_user_id, max_item_id
     except FileNotFoundError:
         print(f"Ratings file not found at {ratings_file_path}")
@@ -146,14 +165,16 @@ def load_rating_matrix_and_dims(ratings_file_path):
 
 
 @st.cache_resource
-def load_trained_autorec_model(num_items, hidden_units, model_state_path='autorec_model_state.pth'):
+def load_trained_autorec_model(
+    num_items, hidden_units, model_state_path="autorec_model_state.pth"
+):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = AutoRec(num_items=num_items, hidden_units=hidden_units)
     try:
         model.load_state_dict(torch.load(model_state_path, map_location=device))
         model.to(device)
-        model.eval() # Set to evaluation mode
-        print("AutoRec model loaded successfully.") # Feedback in UI
+        model.eval()  # Set to evaluation mode
+        print("AutoRec model loaded successfully.")  # Feedback in UI
         return model, device
     except FileNotFoundError:
         print(f"Trained AutoRec model state file not found at {model_state_path}")
@@ -163,11 +184,15 @@ def load_trained_autorec_model(num_items, hidden_units, model_state_path='autore
         return None, None
 
 
-def recommend_autorec_pytorch(user_id, model, full_rating_matrix_np, movies_info_df, top_k=10, device='cpu'):
+def recommend_autorec_pytorch(
+    user_id, model, full_rating_matrix_np, movies_info_df, top_k=10, device="cpu"
+):
     model.eval()
 
     if user_id < 1 or user_id > full_rating_matrix_np.shape[0]:
-        st.error(f"User ID {user_id} is out of valid range (1-{full_rating_matrix_np.shape[0]})")
+        st.error(
+            f"User ID {user_id} is out of valid range (1-{full_rating_matrix_np.shape[0]})"
+        )
         return []
 
     user_index = user_id - 1
@@ -210,10 +235,12 @@ def recommend_autorec_pytorch(user_id, model, full_rating_matrix_np, movies_info
         score = scores_to_sort[local_idx]
 
         try:
-            title = movies_info_df.loc[item_id]['title']
-            if title.strip().lower() == 'unknown':
+            title = movies_info_df.loc[item_id]["title"]
+            if title.strip().lower() == "unknown":
                 continue
-            recommendations.append({'item_id': item_id, 'title': title, 'predicted_rating': score})
+            recommendations.append(
+                {"item_id": item_id, "title": title, "predicted_rating": score}
+            )
             num_added += 1
         except KeyError:
             continue
@@ -225,13 +252,18 @@ def recommend_autorec_pytorch(user_id, model, full_rating_matrix_np, movies_info
 
 
 try:
-    movie_cols = ['item_id', 'title', 'release_date', 'video_release_date', 'imdb_url']
+    movie_cols = ["item_id", "title", "release_date", "video_release_date", "imdb_url"]
     movies_df = pd.read_csv(
-        move_info_path, sep='|', encoding='ISO-8859-1', header=None,
-        names=movie_cols, usecols=[0, 1, 2, 3, 4], index_col='item_id'
+        move_info_path,
+        sep="|",
+        encoding="ISO-8859-1",
+        header=None,
+        names=movie_cols,
+        usecols=[0, 1, 2, 3, 4],
+        index_col="item_id",
     )
     titles_loaded_global = True
-    print(f"Movie titles loaded from {move_info_path}") # Added success message
+    print(f"Movie titles loaded from {move_info_path}")  # Added success message
 except FileNotFoundError:
     print(f"Movie file not found at {move_info_path}. Some features might not work.")
     movies_df = None
@@ -265,7 +297,7 @@ if page == "Naive Approach (cold start)":
     st.title("Naive Approach (cold start)")
     st.write("### Select movies and provide ratings (1-5) as much as you can:")
     naive_image_path = os.path.join("pic", "Naive.jpg")
-    st.image(naive_image_path,  use_container_width=True)
+    st.image(naive_image_path, use_container_width=True)
     # List of available movie names
     available_movies = movie_list
 
@@ -315,7 +347,7 @@ elif page == "Naive Approach (existing user)":
     st.title("Naive Approach (existing user)")
     st.write("### Select a user ID to get recommendations:")
     naive_image_path = os.path.join("pic", "Naive.jpg")
-    st.image(naive_image_path,  use_container_width=True)
+    st.image(naive_image_path, use_container_width=True)
     # Dropdown for selecting user ID
     naive_recommender = NaiveRecommendation(is_auto_loaded=True)
     user_num = naive_recommender.user_item_matrix.shape[0]
@@ -331,11 +363,11 @@ elif page == "Naive Approach (existing user)":
         if st.button("Submit"):
             # Display recommendations
             st.write("### Recommendation:")
-            st.write(make_naive_hot_recommendation(user_index=user_id-1))
+            st.write(make_naive_hot_recommendation(user_index=user_id - 1))
     with col2:
         if st.button("Refresh"):
             # Refresh the page by rerunning the script
-            st.rerun()         
+            st.rerun()
 
 # Page 3: Machine Learning Approach
 elif page == "Machine Learning Approach":
@@ -343,53 +375,76 @@ elif page == "Machine Learning Approach":
     st.write("Recommendations based on learned user preferences from ratings.")
     for i in range(2):
         ML_image_path = os.path.join("pic", f"ML_p{i+1}.jpg")
-        st.image(ML_image_path,  use_container_width=True)
+        st.image(ML_image_path, use_container_width=True)
     # Load rating matrix and model
     # Define path to ratings data
     ratings_file_path = os.path.join("data", "raw", "ml-100k", "u.data")
-    rating_matrix_np, max_user_id, max_item_id = load_rating_matrix_and_dims(ratings_file_path)
+    rating_matrix_np, max_user_id, max_item_id = load_rating_matrix_and_dims(
+        ratings_file_path
+    )
 
     if rating_matrix_np is not None and titles_loaded_global:
         # Define hyperparameters used during training (MUST MATCH)
-        HIDDEN_UNITS = 256 # Example, use the value from your training script
-        actual_num_items = rating_matrix_np.shape[1] # Number of items from the matrix
+        HIDDEN_UNITS = 256  # Example, use the value from your training script
+        actual_num_items = rating_matrix_np.shape[1]  # Number of items from the matrix
 
         # Load the model
-        autorec_model, device = load_trained_autorec_model(actual_num_items, HIDDEN_UNITS)
+        autorec_model, device = load_trained_autorec_model(
+            actual_num_items, HIDDEN_UNITS
+        )
 
         if autorec_model is not None:
             st.write("### Select a user ID to get recommendations:")
             # Dropdown for selecting user ID
             user_id = st.selectbox(
                 "Select User ID",
-                options=list(range(1, max_user_id + 1)), # User IDs from 1 to max_user_id
-                key="autorec_user_id_selector"
+                options=list(
+                    range(1, max_user_id + 1)
+                ),  # User IDs from 1 to max_user_id
+                key="autorec_user_id_selector",
             )
 
             if st.button("Get AutoRec Recommendations"):
                 with st.spinner("Generating AutoRec recommendations..."):
                     # Pass the globally loaded movies_df
                     recommendations = recommend_autorec_pytorch(
-                        user_id, autorec_model, rating_matrix_np, movies_df, top_k=10, device=device
+                        user_id,
+                        autorec_model,
+                        rating_matrix_np,
+                        movies_df,
+                        top_k=10,
+                        device=device,
                     )
 
                 if recommendations:
                     st.write("### Top Recommendations from AutoRec:")
                     results_text = ""
                     for i, rec in enumerate(recommendations):
-                        imdb_link = movies_df.loc[rec['item_id']]['imdb_url'] if 'imdb_url' in movies_df.columns else "N/A"
-                        results_text += f"{i+1}. **{rec['title']}** (ID: {rec['item_id']})\n"
-                        results_text += f"   - Predicted Rating: {rec['predicted_rating']:.4f}\n"
+                        imdb_link = (
+                            movies_df.loc[rec["item_id"]]["imdb_url"]
+                            if "imdb_url" in movies_df.columns
+                            else "N/A"
+                        )
+                        results_text += (
+                            f"{i+1}. **{rec['title']}** (ID: {rec['item_id']})\n"
+                        )
+                        results_text += (
+                            f"   - Predicted Rating: {rec['predicted_rating']:.4f}\n"
+                        )
                         if imdb_link != "N/A":
                             results_text += f"   - [IMDb Link]({imdb_link})\n"
                         results_text += "\n"
-                    st.markdown(results_text) # Use markdown for links
+                    st.markdown(results_text)  # Use markdown for links
                 else:
                     st.info(f"No recommendations generated for User {user_id}.")
         else:
-            st.warning("AutoRec model could not be loaded. Cannot generate recommendations.")
+            st.warning(
+                "AutoRec model could not be loaded. Cannot generate recommendations."
+            )
     else:
-        st.error("Could not load necessary data (ratings matrix or movie titles) for AutoRec.")
+        st.error(
+            "Could not load necessary data (ratings matrix or movie titles) for AutoRec."
+        )
 
 # Page 4: Deep Learning Approach
 elif page == "Deep Learning Approach":
@@ -397,7 +452,7 @@ elif page == "Deep Learning Approach":
     st.write("### Provide your information to get recommendations:")
     for i in range(3):
         NN_image_path = os.path.join("pic", f"NN_p{i+1}.jpg")
-        st.image(NN_image_path,  use_container_width=True)
+        st.image(NN_image_path, use_container_width=True)
 
     # Selection box to ask if the user has a user_id
     has_user_id = st.selectbox(
