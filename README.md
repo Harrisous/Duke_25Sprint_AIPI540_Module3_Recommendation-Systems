@@ -123,6 +123,29 @@ We evaluated our model using 5-fold cross-validation on the MovieLens 100K datas
    - Measures the average absolute differences between predicted and actual ratings
    - More interpretable as average rating error
 
+| Metric | Our Model | Matrix Factorization | Neural CF | 
+|--------|-----------|----------------------|-----------|
+| RMSE   | 0.923     | 0.945                | 0.932     |
+| MAE    | 0.728     | 0.749                | 0.736     |
+
+Our model outperforms traditional matrix factorization by 2.3% on RMSE and 2.8% on MAE, and neural collaborative filtering by 1.0% on RMSE and 1.1% on MAE.
+
+### Ablation Studies
+
+We conducted ablation studies to understand the contribution of different components:
+
+| Model Variant | RMSE | MAE |
+|---------------|------|-----|
+| Full Model | 0.923 | 0.728 |
+| Without LLM Embeddings | 0.962 | 0.751 |
+| Without MLP Layers | 0.954 | 0.745 |
+| Without Non-Linear Rating Mapping | 0.935 | 0.732 |
+
+These results demonstrate that:
+- LLM embeddings provide the most significant improvement (4.2% RMSE reduction)
+- MLP layers for transformation contribute substantially (3.4% RMSE reduction)
+- Non-linear rating mapping offers modest but meaningful gains (1.3% RMSE reduction)
+
 ## LLM-as-a-Judge Evaluation
 
 To qualitatively assess recommendation quality, an LLM (GPT-4 Turbo Preview) was used as a judge. It evaluated recommendations from the *AutoRec (ML), **Naive, and **DNN (API)* methods for 5 randomly selected users (IDs 1-180). The LLM scored recommendations based on Relevance, Diversity, and Overall Quality (scale 1-5).
@@ -140,31 +163,6 @@ To qualitatively assess recommendation quality, an LLM (GPT-4 Turbo Preview) was
 *   The *DNN (API)* method performed poorly, providing non-personalized recommendations (the same 3 movies to all users), resulting in very low diversity and overall quality scores. The API endpoint requires investigation.
 *   On this small sample, the *Naive* method surprisingly edged out *AutoRec (ML)* in overall quality, primarily due to higher perceived relevance according to the LLM.
 *   *AutoRec (ML)* demonstrated the highest diversity among the methods evaluated by the LLM.
-
-| Metric | Our Model | Matrix Factorization | Neural CF | 
-|--------|-----------|----------------------|-----------|
-| RMSE   | 0.923     | 0.945                | 0.932     |
-| MAE    | 0.728     | 0.749                | 0.736     |
-
-Our model outperforms traditional matrix factorization by 2.3% on RMSE and 2.8% on MAE, and neural collaborative filtering by 1.0% on RMSE and 1.1% on MAE.
-
-## LLM as Judge
-
-### Ablation Studies
-
-We conducted ablation studies to understand the contribution of different components:
-
-| Model Variant | RMSE | MAE |
-|---------------|------|-----|
-| Full Model | 0.923 | 0.728 |
-| Without LLM Embeddings | 0.962 | 0.751 |
-| Without MLP Layers | 0.954 | 0.745 |
-| Without Non-Linear Rating Mapping | 0.935 | 0.732 |
-
-These results demonstrate that:
-- LLM embeddings provide the most significant improvement (4.2% RMSE reduction)
-- MLP layers for transformation contribute substantially (3.4% RMSE reduction)
-- Non-linear rating mapping offers modest but meaningful gains (1.3% RMSE reduction)
 
 ## Practical Implementation
 
