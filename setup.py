@@ -1,22 +1,22 @@
 import os
 import pathlib
-import sys
-import subprocess
 import shutil
+import subprocess
+import sys
 
 
 def check_dependencies():
     """Check if required dependencies are installed"""
     print("Checking dependencies...")
     try:
-        import pandas
-        import torch
         import fastapi
-        import uvicorn
         import google.genai
-        import tenacity
-        import tqdm
+        import pandas
         import sklearn
+        import tenacity
+        import torch
+        import tqdm
+        import uvicorn
 
         print("All required packages are installed.")
     except ImportError as e:

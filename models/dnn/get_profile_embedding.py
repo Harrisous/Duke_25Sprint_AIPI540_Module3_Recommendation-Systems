@@ -1,18 +1,15 @@
 # get profile embedding for each user and each movie
 
-import pandas as pd
 import os
 import pathlib
 import time
 from typing import List
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-)
-from tqdm import tqdm
+
+import pandas as pd
 from dotenv import load_dotenv
+from tenacity import (retry, retry_if_exception_type, stop_after_attempt,
+                      wait_exponential)
+from tqdm import tqdm
 
 # Load environment variables from .env file
 load_dotenv()

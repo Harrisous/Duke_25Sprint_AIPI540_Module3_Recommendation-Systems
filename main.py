@@ -4,9 +4,9 @@ This script provides a command line interface to run different components of the
 """
 
 import argparse
+import os
 import pathlib
 import sys
-import os
 
 # Define paths
 CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
@@ -77,8 +77,8 @@ def run_api():
         sys.path.append(str(MODELS_DIR))
 
         # Import the server module
-        from api_server import app
         import uvicorn
+        from api_server import app
 
         # Run the server
         uvicorn.run("api_server:app", host="0.0.0.0", port=8000, reload=True)

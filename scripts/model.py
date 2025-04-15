@@ -2,16 +2,17 @@
 Script to train and evaluate the recommendation model
 """
 
+import json
 import pathlib
 import sys
+
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-import pandas as pd
-import numpy as np
+import torch.optim as optim
 from tqdm import tqdm
-import json
 
 # Define paths
 CURRENT_DIR = pathlib.Path(__file__).parent.resolve()

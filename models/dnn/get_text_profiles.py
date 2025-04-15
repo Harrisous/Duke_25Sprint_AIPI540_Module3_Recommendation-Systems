@@ -1,7 +1,8 @@
 import json
-import pandas as pd
 import os
 import pathlib
+
+import pandas as pd
 
 CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
 DATA_DIR = CURRENT_DIR / ".." / ".." / "data"

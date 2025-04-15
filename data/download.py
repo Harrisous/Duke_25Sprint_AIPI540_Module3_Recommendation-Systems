@@ -1,8 +1,9 @@
 # download movielens-100k dataset to data/raw
 
 import pathlib
-import requests
 import shutil
+
+import requests
 
 CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
 

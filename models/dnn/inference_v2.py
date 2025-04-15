@@ -1,29 +1,21 @@
 import pathlib
+import sys
+
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-import pandas as pd
-import numpy as np
+import torch.optim as optim
 from tqdm import tqdm
-import sys
 
 CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
 DATA_DIR = CURRENT_DIR / ".." / ".." / "data"
 
 sys.path.append(CURRENT_DIR.absolute())
 
-from model_v2 import (
-    HybridRecModel,
-    user_ids,
-    item_ids,
-    user_llm_emb,
-    item_llm_emb,
-    user_id_map,
-    item_id_map,
-    item_llm_data,
-)
-
+from model_v2 import (HybridRecModel, item_id_map, item_ids, item_llm_data,
+                      item_llm_emb, user_id_map, user_ids, user_llm_emb)
 
 # Initialize model
 model = HybridRecModel(

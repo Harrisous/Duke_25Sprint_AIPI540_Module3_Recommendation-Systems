@@ -2,15 +2,16 @@
 Script to generate text profiles and embeddings for users and movies
 """
 
+import json
 import os
 import pathlib
-import pandas as pd
-import json
-import sys
-from tqdm import tqdm
-from dotenv import load_dotenv
 import random
+import sys
+
+import pandas as pd
+from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_exponential
+from tqdm import tqdm
 
 # Load environment variables
 load_dotenv()

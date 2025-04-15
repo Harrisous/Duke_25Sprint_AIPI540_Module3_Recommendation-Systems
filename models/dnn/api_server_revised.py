@@ -1,21 +1,18 @@
+import os
+import pathlib
+import sys
+from typing import List, Optional
+
+import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional
-import uvicorn
 from google import genai
 from google.genai import types
 from google.genai.errors import ClientError
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-)
-import sys
-import pathlib
-import os
-from dotenv import load_dotenv
+from pydantic import BaseModel
+from tenacity import (retry, retry_if_exception_type, stop_after_attempt,
+                      wait_exponential)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -28,7 +25,7 @@ GEMINI_MODEL_NAME = "gemini-2.5-pro-preview-03-25"
 sys.path.append(CURRENT_DIR.absolute())
 
 # Import model-related functions
-from inference_v2 import get_recommendations, predict, model
+from inference_v2 import get_recommendations, model, predict
 
 # Initialize FastAPI app
 app = FastAPI(

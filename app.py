@@ -1,8 +1,10 @@
-import streamlit as st
-from models.naive.naive_model import NaiveRecommendation
 import os
+
 import numpy as np
 import requests
+import streamlit as st
+
+from models.naive.naive_model import NaiveRecommendation
 
 
 def extract_movie_info(file_path):

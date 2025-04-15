@@ -2,12 +2,13 @@
 Script to download and prepare MovieLens dataset
 """
 
+import json
 import os
 import pathlib
-import requests
 import zipfile
+
 import pandas as pd
-import json
+import requests
 from tqdm import tqdm
 
 # Define paths
