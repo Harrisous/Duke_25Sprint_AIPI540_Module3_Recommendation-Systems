@@ -111,3 +111,5 @@ Desktop.ini
 *.log
 *.sqlite3
 *.bak
+
+env/
