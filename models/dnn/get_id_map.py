@@ -7,7 +7,11 @@ CURRENT_DIR = pathlib.Path(__file__).parent.resolve()
 DATA_DIR = CURRENT_DIR / ".." / ".." / "data"
 
 # Create ID mapping tables (using all data)
-ratings = pd.read_csv(DATA_DIR / "raw" / "ml-100k" / "u.data", sep="\t", names=["user_id", "item_id", "rating", "timestamp"])
+ratings = pd.read_csv(
+    DATA_DIR / "raw" / "ml-100k" / "u.data",
+    sep="\t",
+    names=["user_id", "item_id", "rating", "timestamp"],
+)
 user_ids = sorted(ratings["user_id"].unique())
 item_ids = sorted(ratings["item_id"].unique())
 user_id_map = {str(uid): idx for idx, uid in enumerate(user_ids)}
