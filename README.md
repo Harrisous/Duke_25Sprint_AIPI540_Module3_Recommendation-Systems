@@ -1,4 +1,5 @@
 # Hybrid Recommendation System
+Team members: Haochen Li, Xiaoquan Kong, Harshitha Rasamsetty, Violet Suh
 
 ## Project Overview
 This project implements an advanced hybrid recommendation system that combines collaborative filtering, content-based filtering, and deep learning techniques to provide personalized movie recommendations to users. The system leverages both user behavior data and descriptive content to create a robust recommendation engine that addresses cold-start problems and provides explainable recommendations.
@@ -120,6 +121,9 @@ recommendations = get_recommendations(
 - Add support for more diverse recommendation strategies
 - Enhance explainability with more detailed content analysis
 - Scale the system to handle larger datasets
+
+## Presentation Slide:
+[canvas slide url](https://www.canva.com/design/DAGkkHsZ_2g/-8bR0jgp6UmJYEcPseuDeA/edit?utm_content=DAGkkHsZ_2g&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
 
 ## Acknowledgments
 - MovieLens dataset from GroupLens Research
