@@ -5,6 +5,9 @@ tenacity
 tqdm
 torch
 scikit-learn
+numpy
+streamlit
 fastapi
 uvicorn
 python-dotenv
+
