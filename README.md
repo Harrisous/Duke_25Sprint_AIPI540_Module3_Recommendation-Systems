@@ -123,8 +123,6 @@ We evaluated our model using 5-fold cross-validation on the MovieLens 100K datas
    - Measures the average absolute differences between predicted and actual ratings
    - More interpretable as average rating error
 
-### Results
-
 | Metric | Our Model | Matrix Factorization | Neural CF | 
 |--------|-----------|----------------------|-----------|
 | RMSE   | 0.923     | 0.945                | 0.932     |
@@ -147,6 +145,24 @@ These results demonstrate that:
 - LLM embeddings provide the most significant improvement (4.2% RMSE reduction)
 - MLP layers for transformation contribute substantially (3.4% RMSE reduction)
 - Non-linear rating mapping offers modest but meaningful gains (1.3% RMSE reduction)
+
+## LLM-as-a-Judge Evaluation
+
+To qualitatively assess recommendation quality, an LLM (GPT-4 Turbo Preview) was used as a judge. It evaluated recommendations from the *AutoRec (ML), **Naive, and **DNN (API)* methods for 5 randomly selected users (IDs 1-180). The LLM scored recommendations based on Relevance, Diversity, and Overall Quality (scale 1-5).
+
+*Average Scores:*
+
+| Criterion          | AutoRec (ML) (Avg. / 5) | Naive Method (Avg. / 5) | DNN (API) (Avg. / 5) |
+| :----------------- | :---------------------: | :---------------------: | :------------------: |
+| *Relevance*      |         3.20            |         3.80            |       3.60           |
+| *Diversity*      |         4.00            |         3.60            |       2.00           |
+| *Overall Quality*|         3.40            |         3.80            |       2.80           |
+
+*Key Findings:*
+
+*   The *DNN (API)* method performed poorly, providing non-personalized recommendations (the same 3 movies to all users), resulting in very low diversity and overall quality scores. The API endpoint requires investigation.
+*   On this small sample, the *Naive* method surprisingly edged out *AutoRec (ML)* in overall quality, primarily due to higher perceived relevance according to the LLM.
+*   *AutoRec (ML)* demonstrated the highest diversity among the methods evaluated by the LLM.
 
 ## Practical Implementation
 
